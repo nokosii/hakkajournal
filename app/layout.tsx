@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
-const socialImage = new URL('/og.png', 'https://hakka-digital-humanities-journal.changehakka.chatgpt.site').toString();
+const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000';
+const socialImage = new URL('/og.png', siteUrl).toString();
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: '客家與數位人文期刊｜Journal of Hakka and Digital Humanities',
   description: '由學術社群主導、採公開同儕審查的客家與數位人文鑽石開放取用期刊。',
   openGraph: {

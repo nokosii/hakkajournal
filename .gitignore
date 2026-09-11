@@ -36,3 +36,7 @@ next-env.d.ts
 /.wrangler/
 /outputs/
 /work/
+/.sites-runtime/
+
+# local reference material
+/客家研究專書_整體與逐章審查表.docx

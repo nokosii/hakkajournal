@@ -59,7 +59,7 @@ export default function Home() {
           <div className="record-status"><span /> 徵求審稿人</div>
           <div className="record-main">
             <p className="article-type">{featured.type} · PREPRINT</p>
-            <h3><a href={`/articles/${featured.id}`}>{featured.title}</a></h3>
+            <h3><a href="/articles">{featured.title}</a></h3>
             <p>{featured.authors} · {featured.affiliation}</p>
             <div className="keyword-row">{featured.keywords.map((keyword) => <span key={keyword}>{keyword}</span>)}</div>
           </div>
@@ -69,7 +69,7 @@ export default function Home() {
             <div><span>3</span><b>推薦與出版</b><small>尚待完成</small></div>
           </div>
           <div className="record-actions">
-            <Button nativeButton={false} render={<a href={`/articles/${featured.id}`} />} variant="outline"><BookOpen /> 閱讀預印本</Button>
+            <Button nativeButton={false} render={<a href="/articles" />} variant="outline"><BookOpen /> 瀏覽預印本</Button>
             <Button nativeButton={false} render={<a href="/review" />}>我要審稿 <ArrowRight /></Button>
           </div>
         </article>

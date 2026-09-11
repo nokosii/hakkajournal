@@ -1,15 +1,11 @@
-import { env } from 'cloudflare:workers';
+import { query } from '@/lib/db';
 
-type ManuscriptRecord = { manuscriptKey: string; manuscriptName: string };
+type Manuscript = { preprintData: Buffer; preprintName: string; preprintType: string };
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const record = await env.DB.prepare('SELECT manuscript_key AS manuscriptKey, manuscript_name AS manuscriptName FROM submissions WHERE id = ?').bind(id).first<ManuscriptRecord>();
+  const result = await query<Manuscript>('SELECT preprint_data AS "preprintData", preprint_name AS "preprintName", preprint_type AS "preprintType" FROM submissions WHERE id = $1', [id]);
+  const record = result.rows[0];
   if (!record) return Response.json({ error: '找不到預印本。' }, { status: 404 });
-  const object = await env.UPLOADS.get(record.manuscriptKey);
-  if (!object) return Response.json({ error: '預印本檔案不存在。' }, { status: 404 });
-  const headers = new Headers();
-  object.writeHttpMetadata(headers);
-  headers.set('content-disposition', `attachment; filename*=UTF-8''${encodeURIComponent(record.manuscriptName)}`);
-  return new Response(object.body, { headers });
+  return new Response(new Uint8Array(record.preprintData), { headers: { 'content-type': record.preprintType, 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(record.preprintName)}` } });
 }

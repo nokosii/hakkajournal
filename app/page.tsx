@@ -11,7 +11,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { articles } from '@/lib/journal-data';
 
-const editors = ['楊長鎮', '俞龍通', '張維安', '李筑軒', '范以欣', '李志成'];
+const editors = ['張維安', '楊長鎮', '俞龍通', '李筑軒', '范以欣', '李志成'];
 
 export default function Home() {
   const featured = articles[0];

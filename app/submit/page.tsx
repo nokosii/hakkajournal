@@ -21,7 +21,7 @@ export default async function SubmitPage() {
         <ul><li><CheckCircle2 /> 全年徵稿</li><li><CheckCircle2 /> 公開同儕審查</li><li><CheckCircle2 /> 投稿與出版零費用</li></ul>
       </section>
       <section className="submission-layout">
-        <aside className="submission-guide"><p className="eyebrow">BEFORE YOU START</p><h2>投稿前請準備</h2><ol><li><span>1</span>可公開閱讀的 PDF 預印本</li><li><span>2</span>清楚的研究問題、材料與方法</li><li><span>3</span>中英文題名、摘要與關鍵字</li></ol><p className="guide-note">研究論文以 8,000–20,000 字為原則。歡迎歷史、語言、文學、社會、文化、地方研究、數位典藏、資料分析與人工智慧等取徑。作者姓名、審查意見、回覆與推薦文字會隨流程公開。</p></aside>
+        <aside className="submission-guide"><p className="eyebrow">BEFORE YOU START</p><h2>投稿前請準備</h2><ol><li><span>1</span>可公開閱讀的 PDF 預印本</li><li><span>2</span>清楚的研究問題、材料與方法</li><li><span>3</span>中英文題名、摘要與關鍵字</li></ol><p className="guide-note">研究論文 25,000 字以內；數位方法／資料論文及研究紀要 15,000 字以內；評論／書評 5,000 字以內。正文引註與參考文獻請採 APA 第七版。<br /><a href="/guidelines">閱讀完整投稿須知</a></p></aside>
         <SubmissionForm memberName={user.displayName} memberAffiliation={user.affiliation ?? ''} />
       </section>
       <SiteFooter />

@@ -17,6 +17,7 @@ const tables = {
   REVIEWS: ['id', 'submission_id', 'reviewer_user_id', 'reviewer_name', 'score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics', 'academic_strengths', 'required_revisions', 'other_suggestions', 'recommendation', 'conflict_statement', 'is_anonymous', 'created_at'],
   RESPONSES: ['id', 'review_id', 'submission_id', 'author_user_id', 'response_text', 'created_at', 'updated_at'],
   REVISIONS: ['id', 'submission_id', 'uploader_user_id', 'file_id', 'file_name', 'file_type', 'article_body', 'change_summary', 'created_at'],
+  MESSAGES: ['id', 'user_id', 'display_name', 'subject', 'message', 'created_at'],
 } as const;
 
 type TableName = keyof typeof tables;
@@ -107,7 +108,7 @@ async function googleFetch(url: string, init: RequestInit = {}) {
 }
 
 function emptyDatabase(): DriveDatabase {
-  return { version: 1, USERS: [], SESSIONS: [], ISSUES: [], SUBMISSIONS: [], REVIEWS: [], RESPONSES: [], REVISIONS: [] };
+  return { version: 1, USERS: [], SESSIONS: [], ISSUES: [], SUBMISSIONS: [], REVIEWS: [], RESPONSES: [], REVISIONS: [], MESSAGES: [] };
 }
 
 function normalizeDatabase(input: unknown): DriveDatabase {
@@ -401,6 +402,14 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     const user = users.find((item) => item.id === values[0] && item.role !== values[2]);
     if (!user) return result([], 0);
     await updateRecord('USERS', 'id', String(values[0]), { role: values[1] });
+    return result([], 1);
+  });
+  if (statement.startsWith('select id,display_name as "displayname",subject,message,created_at as "createdat" from guestbook_messages')) {
+    const messages = await readRecords('MESSAGES');
+    return result(messages.sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 100).map((item) => ({ id: item.id, displayName: item.display_name, subject: item.subject, message: item.message, createdAt: item.created_at })));
+  }
+  if (statement.startsWith('insert into guestbook_messages')) return withWriteLock(async () => {
+    await appendRecord('MESSAGES', { id: values[0], user_id: values[1], display_name: values[2], subject: values[3], message: values[4], created_at: now() });
     return result([], 1);
   });
 

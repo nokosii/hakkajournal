@@ -13,7 +13,7 @@ export async function SiteHeader() {
           <span className="brand-mark" aria-hidden="true"><b>客</b></span>
           <span><strong>客家與數位人文期刊</strong><small>Journal of Hakka and Digital Humanities</small></span>
         </a>
-        <nav aria-label="主要導覽"><a href="/issues">期刊卷期</a><a href="/articles">預印本與文章</a><a href="/#editorial">編輯團隊</a><a href="/review">公開審查</a></nav>
+        <nav aria-label="主要導覽"><a href="/about">關於本刊</a><a href="/guidelines">投稿須知</a><a href="/issues">期刊卷期</a><a href="/articles">預印本與文章</a><a href="/messages">留言板</a></nav>
         {user ? <MemberAccount name={user.displayName} role={user.role} /> : <Button nativeButton={false} render={<a href="/login" />} className="header-cta">會員登入 <ArrowRight /></Button>}
       </header>
     </>

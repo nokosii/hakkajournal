@@ -14,7 +14,7 @@ const tables = {
   SESSIONS: ['token_hash', 'user_id', 'expires_at', 'created_at'],
   ISSUES: ['id', 'volume', 'number', 'year', 'title', 'description', 'status', 'published_at', 'created_by', 'created_at'],
   SUBMISSIONS: ['id', 'submitter_user_id', 'title', 'title_en', 'author_name', 'affiliation', 'category', 'abstract', 'abstract_en', 'keywords', 'author_email', 'submission_channel', 'preprint_file_id', 'preprint_name', 'preprint_type', 'final_file_id', 'final_name', 'final_type', 'final_uploaded_at', 'status', 'editor_notes', 'article_body', 'pages', 'doi', 'issue_id', 'published_at', 'created_at', 'updated_at'],
-  REVIEWS: ['id', 'submission_id', 'reviewer_user_id', 'reviewer_name', 'score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics', 'academic_strengths', 'required_revisions', 'other_suggestions', 'recommendation', 'conflict_statement', 'created_at'],
+  REVIEWS: ['id', 'submission_id', 'reviewer_user_id', 'reviewer_name', 'score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics', 'academic_strengths', 'required_revisions', 'other_suggestions', 'recommendation', 'conflict_statement', 'is_anonymous', 'created_at'],
 } as const;
 
 type TableName = keyof typeof tables;
@@ -337,8 +337,10 @@ function publicSubmission(row: StoreRecord, reviews: StoreRecord[]) {
 
 function publicReview(row: StoreRecord) {
   const scores = [row.score_relevance, row.score_contribution, row.score_literature, row.score_method, row.score_structure, row.score_ethics].map(numberOrNull);
+  const isAnonymous = row.is_anonymous === 'true';
   return {
-    id: row.id, reviewerName: row.reviewer_name, scoreRelevance: numberOrNull(row.score_relevance),
+    id: row.id, reviewerName: isAnonymous ? '匿名審查人' : row.reviewer_name, isAnonymous,
+    scoreRelevance: numberOrNull(row.score_relevance),
     scoreContribution: numberOrNull(row.score_contribution), scoreLiterature: numberOrNull(row.score_literature),
     scoreMethod: numberOrNull(row.score_method), scoreStructure: numberOrNull(row.score_structure),
     scoreEthics: numberOrNull(row.score_ethics), academicStrengths: row.academic_strengths,
@@ -498,7 +500,7 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     if (reviews.some((review) => review.submission_id === values[1] && review.reviewer_user_id === values[2])) {
       const error = new Error('Duplicate review') as Error & { code?: string }; error.code = '23505'; throw error;
     }
-    await appendRecord('REVIEWS', { id: values[0], submission_id: values[1], reviewer_user_id: values[2], reviewer_name: values[3], score_relevance: values[4], score_contribution: values[5], score_literature: values[6], score_method: values[7], score_structure: values[8], score_ethics: values[9], academic_strengths: values[10], required_revisions: values[11], other_suggestions: values[12], recommendation: values[13], conflict_statement: 'true', created_at: now() });
+    await appendRecord('REVIEWS', { id: values[0], submission_id: values[1], reviewer_user_id: values[2], reviewer_name: values[3], score_relevance: values[4], score_contribution: values[5], score_literature: values[6], score_method: values[7], score_structure: values[8], score_ethics: values[9], academic_strengths: values[10], required_revisions: values[11], other_suggestions: values[12], recommendation: values[13], conflict_statement: 'true', is_anonymous: values[14], created_at: now() });
     return result([], 1);
   });
   if (statement.includes('from reviews where submission_id')) {

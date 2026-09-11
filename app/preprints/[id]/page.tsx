@@ -17,7 +17,7 @@ type Preprint = {
   submitterUserId: string; submissionChannel: string; finalName: string | null;
 };
 type Review = {
-  id: string; reviewerName: string; recommendation: string; scores: Array<number | null>;
+  id: string; reviewerName: string; isAnonymous: boolean; recommendation: string; scores: Array<number | null>;
   academicStrengths: string; requiredRevisions: string; otherSuggestions: string; createdAt: string;
 };
 
@@ -38,7 +38,8 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
   ]);
   const preprint = preprints.rows[0];
   if (!preprint) notFound();
-  const reviewRows = await query(`SELECT id,reviewer_name AS "reviewerName",recommendation,
+  const reviewRows = await query(`SELECT id,CASE WHEN is_anonymous THEN '匿名審查人' ELSE reviewer_name END AS "reviewerName",
+    is_anonymous AS "isAnonymous",recommendation,
     ARRAY[score_relevance,score_contribution,score_literature,score_method,score_structure,score_ethics] AS scores,
     academic_strengths AS "academicStrengths",required_revisions AS "requiredRevisions",
     other_suggestions AS "otherSuggestions",created_at AS "createdAt"
@@ -69,7 +70,7 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
                 const scored = review.scores.filter((score): score is number => score !== null);
                 const avg = scored.length ? (scored.reduce((sum, score) => sum + score, 0) / scored.length).toFixed(1) : '—';
                 return <article key={review.id}>
-                  <header><div><b>{review.reviewerName}</b><span>公開審查人 · 平均 {avg}</span></div><strong>{recommendationLabels[review.recommendation]}</strong></header>
+                  <header><div><b>{review.reviewerName}</b><span>{review.isAnonymous ? '匿名' : '具名'}審查 · 平均 {avg}</span></div><strong>{recommendationLabels[review.recommendation]}</strong></header>
                   <div className="published-scores">{review.scores.map((score, index) => <span key={scoreLabels[index]}>{scoreLabels[index]} <b>{score ?? 'N/A'}</b></span>)}</div>
                   <h3>學術優點</h3><p>{review.academicStrengths}</p>
                   <h3>必要修改</h3><p>{review.requiredRevisions}</p>

@@ -23,6 +23,8 @@ export function ReviewWorkspace({ reviewerName }: { reviewerName: string }) {
   const [selectedId, setSelectedId] = useState('');
   const [scores, setScores] = useState(initialScores);
   const [recommendation, setRecommendation] = useState('minor_revision');
+  const [isAnonymous, setIsAnonymous] = useState(false);
+  const [savedAnonymously, setSavedAnonymously] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -47,20 +49,20 @@ export function ReviewWorkspace({ reviewerName }: { reviewerName: string }) {
     setSaving(true); setError('');
     const form = new FormData(event.currentTarget);
     try {
-      const response = await fetch('/api/reviews', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ submissionId: selected.id, recommendation, ...scores, academicStrengths: form.get('academicStrengths'), requiredRevisions: form.get('requiredRevisions'), otherSuggestions: form.get('otherSuggestions'), conflictConfirmed: form.get('conflictConfirmed') === 'on' }) });
+      const response = await fetch('/api/reviews', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ submissionId: selected.id, recommendation, isAnonymous, ...scores, academicStrengths: form.get('academicStrengths'), requiredRevisions: form.get('requiredRevisions'), otherSuggestions: form.get('otherSuggestions'), conflictConfirmed: form.get('conflictConfirmed') === 'on' }) });
       const result = await response.json() as { error?: string };
       if (!response.ok) throw new Error(result.error || '儲存失敗，請稍後再試。');
-      setSaved(true);
+      setSavedAnonymously(isAnonymous); setSaved(true);
     } catch (caught) { setError(caught instanceof Error ? caught.message : '儲存失敗。'); }
     finally { setSaving(false); }
   }
 
   if (loading) return <div className="review-success"><LoaderCircle className="spin" /><h2>載入公開稿件</h2></div>;
   if (!submissions.length) return <div className="review-success"><BookOpen /><h2>目前沒有待審稿件</h2><p>新預印本發布後，會在此開放所有會員參與審查。</p></div>;
-  if (saved) return <div className="review-success"><span><Check /></span><h2>正式審查表已送出</h2><p>感謝 {reviewerName} 完成稿件 {selectedId} 的公開審查。六項評分與文字意見已保存。</p><Button onClick={() => { setSaved(false); setScores(initialScores); }}>審閱其他稿件</Button></div>;
+  if (saved) return <div className="review-success"><span><Check /></span><h2>正式審查表已送出</h2><p>稿件 {selectedId} 的六項評分與文字意見已保存。{savedAnonymously ? '公開頁面將顯示「匿名審查人」，您的真實身分僅供編輯部管理。' : `公開頁面將顯示審查人姓名「${reviewerName}」。`}</p><Button onClick={() => { setSaved(false); setScores(initialScores); setIsAnonymous(false); }}>審閱其他稿件</Button></div>;
 
   return <div className="review-grid open-review-grid">
-    <aside className="manuscript-card review-queue"><p className="article-type">OPEN CALL FOR REVIEWERS</p><h2>開放審查稿件</h2><p className="queue-intro">請選擇符合您專長、且無利益衝突的預印本。</p><div className="queue-list">{submissions.map((item) => <button type="button" key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => { setSelectedId(item.id); setSaved(false); setScores(initialScores); }}><span>{item.category} · {item.reviewCount} 份審查</span><b>{item.title}</b><small>{item.authorName}</small></button>)}</div></aside>
+    <aside className="manuscript-card review-queue"><p className="article-type">OPEN CALL FOR REVIEWERS</p><h2>開放審查稿件</h2><p className="queue-intro">請選擇符合您專長、且無利益衝突的預印本。</p><div className="queue-list">{submissions.map((item) => <button type="button" key={item.id} className={selectedId === item.id ? 'selected' : ''} onClick={() => { setSelectedId(item.id); setSaved(false); setScores(initialScores); setIsAnonymous(false); }}><span>{item.category} · {item.reviewCount} 份審查</span><b>{item.title}</b><small>{item.authorName}</small></button>)}</div></aside>
     {selected && <form className="review-form formal-review-form" onSubmit={saveReview}>
       <div className="review-form-head"><FileText /><div><p className="article-type">{selected.category} · PREPRINT</p><h2>{selected.title}</h2><p>{selected.authorName}{selected.affiliation ? ` · ${selected.affiliation}` : ''}</p></div></div>
       <section className="review-abstract"><b>摘要</b><p>{selected.abstract}</p>{selected.keywords && <small>關鍵字：{selected.keywords}</small>}<a href={`/api/manuscripts/${selected.id}`}>下載預印本全文</a></section>
@@ -75,7 +77,8 @@ export function ReviewWorkspace({ reviewerName }: { reviewerName: string }) {
       <label><span>必要修改（請標示頁碼／段落）*</span><Textarea name="requiredRevisions" required minLength={40} placeholder="逐項列出作者必須回應的問題，並盡量註明頁碼或段落……" /></label>
       <label><span>其他建議／N/A 說明</span><Textarea name="otherSuggestions" placeholder="選擇 N/A 的原因，或其他不影響判定的建議……" /></label>
       <fieldset><legend>總體判定 *</legend><div className="recommendations">{[['accept','直接推薦'],['minor_revision','修正後推薦'],['major_revision','重大修正後再審'],['reject','不予推薦']].map(([value,label]) => <label key={value} className={recommendation === value ? 'selected' : ''}><input type="radio" name="recommendation" value={value} checked={recommendation === value} onChange={() => setRecommendation(value)} />{label}</label>)}</div></fieldset>
-      <label className="declaration review-declaration"><input type="checkbox" name="conflictConfirmed" required /><span>我確認具備相關專長、沒有未揭露的利益衝突，並同意以「{reviewerName}」公開此份審查。</span></label>
+      <fieldset className="review-identity"><legend>審查人身分顯示方式 *</legend><div><label className={!isAnonymous ? 'selected' : ''}><input type="radio" name="reviewIdentity" value="named" checked={!isAnonymous} onChange={() => setIsAnonymous(false)} /><span><b>具名審查</b><small>公開顯示「{reviewerName}」</small></span></label><label className={isAnonymous ? 'selected' : ''}><input type="radio" name="reviewIdentity" value="anonymous" checked={isAnonymous} onChange={() => setIsAnonymous(true)} /><span><b>匿名審查</b><small>公開顯示「匿名審查人」；真實身分僅供編輯部管理</small></span></label></div></fieldset>
+      <label className="declaration review-declaration"><input type="checkbox" name="conflictConfirmed" required /><span>我確認具備相關專長，且沒有未揭露的利益衝突。</span></label>
       <div className="open-review-note"><Scale /><p><b>正式公開紀錄</b><br />評分與意見送出後即成為可引用的學術紀錄，請保持具體、尊重且可回應。</p></div>
       {error && <p className="form-error" role="alert">{error}</p>}
       <div className="review-actions"><Button type="submit" disabled={saving}>{saving ? <><LoaderCircle className="spin" /> 送出中</> : <><Users /> 正式送出審查表</>}</Button></div>

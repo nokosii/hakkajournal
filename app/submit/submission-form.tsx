@@ -35,7 +35,7 @@ export function SubmissionForm({ memberName, memberAffiliation }: { memberName: 
         <div className="field-grid"><label><span>通訊作者姓名 *</span><Input name="authorName" required defaultValue={memberName} /></label><label className="full-field"><span>服務單位</span><Input name="affiliation" defaultValue={memberAffiliation} placeholder="學校／機構、系所與職稱" /></label></div>
       </section>
       <section className="form-section"><div className="form-number">03</div><div><h2>預印本上傳與公開聲明</h2><p>請上傳可供社群閱讀與審查的版本。</p></div>
-        <label className="upload-zone"><FileUp /><b>選擇預印本檔案 *</b><span>接受 PDF、DOC、DOCX，檔案上限 20 MB</span><Input name="manuscript" type="file" accept=".pdf,.doc,.docx" required /></label>
+        <label className="upload-zone"><FileUp /><b>選擇預印本 PDF *</b><span>僅接受 PDF，檔案上限 20 MB</span><Input name="manuscript" type="file" accept="application/pdf,.pdf" required /></label>
         <label className="declaration"><input type="checkbox" name="openReviewConsent" required /><span>本人確認稿件未一稿多投，並同意公開作者身分、預印本、審查意見、作者回覆與編輯推薦紀錄。</span></label>
       </section>
       {error && <p className="form-error" role="alert">{error}</p>}

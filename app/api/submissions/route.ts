@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { assertSameOrigin, getCurrentUser } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { readValidatedPdf } from '@/lib/pdf-upload';
 
 type SubmissionListRow = { id: string; title: string; authorName: string; affiliation: string | null; category: string; abstract: string; keywords: string | null; status: string; reviewCount: number; issueId: string | null; createdAt: string };
 
@@ -29,14 +30,13 @@ export async function POST(request: Request) {
   const keywords = String(data.get('keywords') ?? '').trim();
   const manuscript = data.get('manuscript');
   const openReviewConsent = data.get('openReviewConsent') === 'on';
-  if (!title || !authorName || !category || abstract.length < 80 || !openReviewConsent || !(manuscript instanceof File) || manuscript.size === 0) return Response.json({ error: '請完成必填欄位、公開審查聲明並上傳預印本。' }, { status: 400 });
-  if (manuscript.size > 20 * 1024 * 1024) return Response.json({ error: '預印本不得超過 20 MB。' }, { status: 400 });
-  const extension = manuscript.name.split('.').pop()?.toLowerCase();
-  if (!extension || !['pdf', 'doc', 'docx'].includes(extension)) return Response.json({ error: '預印本僅接受 PDF、DOC 或 DOCX。' }, { status: 400 });
+  if (!title || !authorName || !category || abstract.length < 80 || !openReviewConsent || !(manuscript instanceof File)) return Response.json({ error: '請完成必填欄位、公開審查聲明並上傳預印本 PDF。' }, { status: 400 });
+  let bytes: Buffer;
+  try { bytes = await readValidatedPdf(manuscript, '預印本'); }
+  catch (error) { return Response.json({ error: error instanceof Error ? error.message : '預印本僅接受 PDF 檔案。' }, { status: 400 }); }
   const id = `JHDH-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
-  const bytes = Buffer.from(await manuscript.arrayBuffer());
   await query(`INSERT INTO submissions
     (id, submitter_user_id, title, title_en, author_name, affiliation, category, abstract, abstract_en, keywords, preprint_data, preprint_name, preprint_type)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [id, user.id, title, titleEn || null, authorName, affiliation || null, category, abstract, abstractEn || null, keywords || null, bytes, manuscript.name, manuscript.type || 'application/octet-stream']);
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [id, user.id, title, titleEn || null, authorName, affiliation || null, category, abstract, abstractEn || null, keywords || null, bytes, manuscript.name, 'application/pdf']);
   return Response.json({ id, status: 'open_review' }, { status: 201 });
 }

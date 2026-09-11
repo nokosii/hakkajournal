@@ -4,7 +4,8 @@
 
 - 個人 Google Drive 資料夾作為正式資料來源。
 - `journal-database.json` 保存會員、登入工作階段、投稿、審查、文章與期刊卷期資料。
-- `preprints/` 子資料夾保存 PDF、DOC、DOCX 預刊本。
+- `preprints/` 子資料夾保存 PDF 預刊本。
+- `final-articles/` 子資料夾保存作者上傳的最終版本 PDF。
 - Render 或本機的 `.data/` 只作為 JSON 快取；每次正式寫入後會同步回 Google Drive。
 
 會員密碼只保存 scrypt 雜湊值，不會保存可讀的原始密碼。

@@ -13,7 +13,7 @@ const tables = {
   USERS: ['id', 'email', 'password_hash', 'display_name', 'affiliation', 'expertise', 'role', 'status', 'created_at'],
   SESSIONS: ['token_hash', 'user_id', 'expires_at', 'created_at'],
   ISSUES: ['id', 'volume', 'number', 'year', 'title', 'description', 'status', 'published_at', 'created_by', 'created_at'],
-  SUBMISSIONS: ['id', 'submitter_user_id', 'title', 'title_en', 'author_name', 'affiliation', 'category', 'abstract', 'abstract_en', 'keywords', 'preprint_file_id', 'preprint_name', 'preprint_type', 'status', 'editor_notes', 'article_body', 'pages', 'doi', 'issue_id', 'published_at', 'created_at', 'updated_at'],
+  SUBMISSIONS: ['id', 'submitter_user_id', 'title', 'title_en', 'author_name', 'affiliation', 'category', 'abstract', 'abstract_en', 'keywords', 'preprint_file_id', 'preprint_name', 'preprint_type', 'final_file_id', 'final_name', 'final_type', 'final_uploaded_at', 'status', 'editor_notes', 'article_body', 'pages', 'doi', 'issue_id', 'published_at', 'created_at', 'updated_at'],
   REVIEWS: ['id', 'submission_id', 'reviewer_user_id', 'reviewer_name', 'score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics', 'academic_strengths', 'required_revisions', 'other_suggestions', 'recommendation', 'conflict_statement', 'created_at'],
 } as const;
 
@@ -35,6 +35,8 @@ declare global {
   var __jhdhGoogleDatabaseFileId: string | undefined;
   // eslint-disable-next-line no-var
   var __jhdhGooglePreprintsFolderId: string | undefined;
+  // eslint-disable-next-line no-var
+  var __jhdhGoogleFinalsFolderId: string | undefined;
 }
 
 export function googleStoreConfigured() {
@@ -233,6 +235,7 @@ async function ensureGoogleStore() {
         catch { global.__jhdhGoogleDatabase = emptyDatabase(); }
       }
       global.__jhdhGooglePreprintsFolderId = await ensureFolder(folderId, 'preprints');
+      global.__jhdhGoogleFinalsFolderId = await ensureFolder(folderId, 'final-articles');
       const changed = await bootstrapEditor();
       if (!remote || changed) await persistDatabase();
     })();
@@ -283,10 +286,18 @@ async function withWriteLock<T>(operation: () => Promise<T>) {
   try { return await operation(); } finally { release(); }
 }
 
-async function uploadPreprint(name: string, mimeType: string, data: Buffer) {
+async function uploadDocument(folderId: string | undefined, folderLabel: string, name: string, mimeType: string, data: Buffer, existingFileId = '') {
   await ensureGoogleStore();
-  const folderId = global.__jhdhGooglePreprintsFolderId;
-  if (!folderId) throw new Error('Google Drive 預刊本資料夾尚未建立。');
+  if (!folderId) throw new Error(`Google Drive ${folderLabel}資料夾尚未建立。`);
+  if (existingFileId) {
+    await googleFetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(existingFileId)}?uploadType=media&supportsAllDrives=true`, {
+      method: 'PATCH', headers: { 'content-type': mimeType }, body: Uint8Array.from(data),
+    });
+    await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(existingFileId)}?supportsAllDrives=true`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ name }),
+    });
+    return existingFileId;
+  }
   const boundary = `jhdh-${randomUUID()}`;
   const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
   const suffix = `\r\n--${boundary}--`;
@@ -297,7 +308,15 @@ async function uploadPreprint(name: string, mimeType: string, data: Buffer) {
   return result.id;
 }
 
-async function downloadPreprint(fileId: string) {
+async function uploadPreprint(name: string, mimeType: string, data: Buffer) {
+  return uploadDocument(global.__jhdhGooglePreprintsFolderId, '預印本', name, mimeType, data);
+}
+
+async function uploadFinalPdf(name: string, mimeType: string, data: Buffer, existingFileId: string) {
+  return uploadDocument(global.__jhdhGoogleFinalsFolderId, '正式文章', name, mimeType, data, existingFileId);
+}
+
+async function downloadDocument(fileId: string) {
   const response = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`);
   return Buffer.from(await response.arrayBuffer());
 }
@@ -376,13 +395,24 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
 
   if (statement.startsWith('insert into submissions')) return withWriteLock(async () => {
     const fileId = await uploadPreprint(String(values[11]), String(values[12]), values[10] as Buffer);
-    await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], preprint_file_id: fileId, preprint_name: values[11], preprint_type: values[12], status: 'open_review', editor_notes: '', article_body: '', pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
+    await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], preprint_file_id: fileId, preprint_name: values[11], preprint_type: values[12], final_file_id: '', final_name: '', final_type: '', final_uploaded_at: '', status: 'open_review', editor_notes: '', article_body: '', pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
     return result([], 1);
   });
   if (statement.includes('from submissions s left join reviews r') && statement.includes("where s.status in ('open_review', 'revision', 'accepted', 'published')")) {
     const [submissions, reviews] = await Promise.all([readRecords('SUBMISSIONS'), readRecords('REVIEWS')]);
     const visible = new Set(['open_review', 'revision', 'accepted', 'published']);
     return result(submissions.filter((item) => visible.has(item.status)).sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 100).map((item) => publicSubmission(item, reviews)));
+  }
+  if (statement.startsWith('select submitter_user_id as "submitteruserid"') && statement.includes('final_data as "finaldata"')) {
+    const submissions = await readRecords('SUBMISSIONS');
+    const submission = submissions.find((item) => item.id === values[0]);
+    if (!submission) return result([]);
+    return result([{ submitterUserId: submission.submitter_user_id, status: submission.status, finalData: submission.final_file_id ? await downloadDocument(submission.final_file_id) : null, finalName: nullable(submission.final_name), finalType: nullable(submission.final_type) }]);
+  }
+  if (statement.startsWith('select submitter_user_id as "submitteruserid"') && statement.includes('final_name as "finalname"')) {
+    const submissions = await readRecords('SUBMISSIONS');
+    const submission = submissions.find((item) => item.id === values[0]);
+    return result(submission ? [{ submitterUserId: submission.submitter_user_id, status: submission.status, finalName: nullable(submission.final_name) }] : []);
   }
   if (statement.startsWith('select submitter_user_id as "submitteruserid"')) {
     const submissions = await readRecords('SUBMISSIONS');
@@ -393,24 +423,37 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     const submissions = await readRecords('SUBMISSIONS');
     const submission = submissions.find((item) => item.id === values[0]);
     if (!submission) return result([]);
-    return result([{ preprintData: await downloadPreprint(submission.preprint_file_id), preprintName: submission.preprint_name, preprintType: submission.preprint_type }]);
+    return result([{ preprintData: await downloadDocument(submission.preprint_file_id), preprintName: submission.preprint_name, preprintType: submission.preprint_type }]);
   }
   if (statement.startsWith('select id,title,title_en as "titleen",author_name as "authorname"') && statement.includes("from submissions where id=$1 and status <> 'rejected'")) {
     const submissions = await readRecords('SUBMISSIONS');
     const item = submissions.find((row) => row.id === values[0] && ['open_review', 'revision', 'accepted', 'published'].includes(row.status));
-    return result(item ? [{ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, affiliation: nullable(item.affiliation), category: item.category, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), preprintName: item.preprint_name, status: item.status, createdAt: item.created_at }] : []);
+    return result(item ? [{ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, affiliation: nullable(item.affiliation), category: item.category, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), preprintName: item.preprint_name, submitterUserId: item.submitter_user_id, finalName: nullable(item.final_name), status: item.status, createdAt: item.created_at }] : []);
   }
   if (statement.startsWith('select title,abstract from submissions')) {
     const submissions = await readRecords('SUBMISSIONS');
     const item = submissions.find((row) => row.id === values[0] && row.status === 'published');
     return result(item ? [{ title: item.title, abstract: item.abstract }] : []);
   }
+  if (statement.startsWith('select final_name as "finalname" from submissions')) {
+    const submissions = await readRecords('SUBMISSIONS');
+    const item = submissions.find((row) => row.id === values[0]);
+    return result(item ? [{ finalName: nullable(item.final_name) }] : []);
+  }
   if (statement.includes('from submissions s join issues i') && statement.includes("s.status='published'")) {
     const [submissions, issues] = await Promise.all([readRecords('SUBMISSIONS'), readRecords('ISSUES')]);
     const item = submissions.find((row) => row.id === values[0] && row.status === 'published');
     const issue = item ? issues.find((row) => row.id === item.issue_id && row.status === 'published') : undefined;
-    return result(item && issue ? [{ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, affiliation: nullable(item.affiliation), category: item.category, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), articleBody: item.article_body, pages: nullable(item.pages), doi: nullable(item.doi), publishedAt: item.published_at, volume: numeric(issue.volume), number: numeric(issue.number), year: numeric(issue.year), issueTitle: issue.title }] : []);
+    return result(item && issue ? [{ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, affiliation: nullable(item.affiliation), category: item.category, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), articleBody: item.article_body, pages: nullable(item.pages), doi: nullable(item.doi), finalName: nullable(item.final_name), publishedAt: item.published_at, volume: numeric(issue.volume), number: numeric(issue.number), year: numeric(issue.year), issueTitle: issue.title }] : []);
   }
+  if (statement.startsWith('update submissions set final_data')) return withWriteLock(async () => {
+    const submissions = await readRecords('SUBMISSIONS');
+    const current = submissions.find((item) => item.id === values[0]);
+    if (!current) return result([], 0);
+    const fileId = await uploadFinalPdf(String(values[2]), String(values[3]), values[1] as Buffer, current.final_file_id);
+    await updateRecord('SUBMISSIONS', 'id', String(values[0]), { final_file_id: fileId, final_name: values[2], final_type: values[3], final_uploaded_at: now(), updated_at: now() });
+    return result([], 1);
+  });
   if (statement.startsWith('update submissions set title=')) return withWriteLock(async () => {
     const submissions = await readRecords('SUBMISSIONS');
     const current = submissions.find((item) => item.id === values[0]);
@@ -424,7 +467,7 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
       const itemReviews = reviews.filter((review) => review.submission_id === item.id);
       const reviewAverages = itemReviews.map((review) => ['score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics'].map((key) => numberOrNull(review[key])).filter((score): score is number => score !== null)).filter((scores) => scores.length).map((scores) => scores.reduce((sum, score) => sum + score, 0) / scores.length);
       const averageScore = reviewAverages.length ? Math.round(reviewAverages.reduce((sum, score) => sum + score, 0) / reviewAverages.length * 10) / 10 : null;
-      return { id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), status: item.status, articleBody: item.article_body, pages: nullable(item.pages), doi: nullable(item.doi), issueId: nullable(item.issue_id), editorNotes: item.editor_notes, createdAt: item.created_at, reviewCount: itemReviews.length, averageScore };
+      return { id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), status: item.status, articleBody: item.article_body, pages: nullable(item.pages), doi: nullable(item.doi), finalName: nullable(item.final_name), issueId: nullable(item.issue_id), editorNotes: item.editor_notes, createdAt: item.created_at, reviewCount: itemReviews.length, averageScore };
     }));
   }
   if (statement.startsWith('select count(*)::int as count from submissions')) {

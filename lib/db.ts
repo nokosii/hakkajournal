@@ -35,8 +35,11 @@ async function getLocalDatabase() {
       const dataRoot = path.resolve(process.cwd(), '.data');
       await fs.mkdir(dataRoot, { recursive: true });
       const database = await PGlite.create(path.join(dataRoot, 'jhdh-pglite'));
-      const migration = await fs.readFile(path.resolve(process.cwd(), 'migrations/001_initial.sql'), 'utf8');
-      await database.exec(migration);
+      const migrationsDirectory = path.resolve(process.cwd(), 'migrations');
+      const migrations = (await fs.readdir(migrationsDirectory)).filter((name) => name.endsWith('.sql')).sort();
+      for (const migrationName of migrations) {
+        await database.exec(await fs.readFile(path.join(migrationsDirectory, migrationName), 'utf8'));
+      }
       return database;
     })();
   }

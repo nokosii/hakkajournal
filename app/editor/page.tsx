@@ -14,7 +14,7 @@ export default async function EditorPage() {
   const [submissions, issues, members] = await Promise.all([
     query<Omit<Submission, 'createdAt'> & { createdAt: Date | string }>(`SELECT s.id, s.title, s.title_en AS "titleEn", s.author_name AS "authorName", s.abstract,
       s.abstract_en AS "abstractEn", s.keywords, s.status, s.article_body AS "articleBody", s.pages,
-      s.doi, s.issue_id AS "issueId", s.editor_notes AS "editorNotes", s.created_at AS "createdAt",
+      s.doi, s.final_name AS "finalName", s.issue_id AS "issueId", s.editor_notes AS "editorNotes", s.created_at AS "createdAt",
       COUNT(r.id)::int AS "reviewCount", ROUND(AVG((COALESCE(r.score_relevance,0)+COALESCE(r.score_contribution,0)+COALESCE(r.score_literature,0)+COALESCE(r.score_method,0)+COALESCE(r.score_structure,0)+COALESCE(r.score_ethics,0))::numeric / NULLIF((CASE WHEN r.score_relevance IS NULL THEN 0 ELSE 1 END+CASE WHEN r.score_contribution IS NULL THEN 0 ELSE 1 END+CASE WHEN r.score_literature IS NULL THEN 0 ELSE 1 END+CASE WHEN r.score_method IS NULL THEN 0 ELSE 1 END+CASE WHEN r.score_structure IS NULL THEN 0 ELSE 1 END+CASE WHEN r.score_ethics IS NULL THEN 0 ELSE 1 END),0)),1)::float AS "averageScore"
       FROM submissions s LEFT JOIN reviews r ON r.submission_id=s.id GROUP BY s.id ORDER BY s.created_at DESC`),
     query<Omit<Issue, 'publishedAt'> & { publishedAt: Date | string | null }>(`SELECT id, volume, number, year, title, description, status, published_at AS "publishedAt" FROM issues ORDER BY volume DESC, number DESC`),

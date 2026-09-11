@@ -1,0 +1,4 @@
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS final_data BYTEA;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS final_name TEXT;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS final_type TEXT;
+ALTER TABLE submissions ADD COLUMN IF NOT EXISTS final_uploaded_at TIMESTAMPTZ;

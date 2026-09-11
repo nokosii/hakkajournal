@@ -1,9 +1,11 @@
 import { notFound } from 'next/navigation';
 import { ArrowLeft, Download, MessageSquareText } from 'lucide-react';
+import { getCurrentUser } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { Button } from '@/components/ui/button';
+import { FinalPdfUpload } from './final-pdf-upload';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +13,7 @@ type Preprint = {
   id: string; title: string; titleEn: string | null; authorName: string;
   affiliation: string | null; category: string; abstract: string;
   abstractEn: string | null; keywords: string | null; status: string; createdAt: string;
+  submitterUserId: string; finalName: string | null;
 };
 type Review = {
   id: string; reviewerName: string; recommendation: string; scores: Array<number | null>;
@@ -25,9 +28,13 @@ const scoreLabels = ['主題契合', '學術貢獻', '理論文獻', '方法論�
 
 export default async function PreprintPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const preprints = await query<Preprint>(`SELECT id,title,title_en AS "titleEn",author_name AS "authorName",
-    affiliation,category,abstract,abstract_en AS "abstractEn",keywords,status,created_at AS "createdAt"
-    FROM submissions WHERE id=$1 AND status <> 'rejected'`, [id]);
+  const [preprints, currentUser] = await Promise.all([
+    query<Preprint>(`SELECT id,title,title_en AS "titleEn",author_name AS "authorName",
+    affiliation,category,abstract,abstract_en AS "abstractEn",keywords,status,created_at AS "createdAt",
+    submitter_user_id AS "submitterUserId", final_name AS "finalName"
+    FROM submissions WHERE id=$1 AND status <> 'rejected'`, [id]),
+    getCurrentUser(),
+  ]);
   const preprint = preprints.rows[0];
   if (!preprint) notFound();
   const reviewRows = await query(`SELECT id,reviewer_name AS "reviewerName",recommendation,
@@ -73,7 +80,9 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
           <aside className="article-aside">
             <p><b>公開版本紀錄</b></p>
             <dl><dt>稿件編號</dt><dd>{preprint.id}</dd><dt>提交日期</dt><dd>{new Date(preprint.createdAt).toLocaleDateString('zh-TW')}</dd><dt>狀態</dt><dd>{preprint.status === 'published' ? '正式出版' : '公開審查'}</dd><dt>審查</dt><dd>{reviews.length} 份公開意見</dd><dt>授權</dt><dd>CC BY 4.0</dd></dl>
-            <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}`} />} className="download-button"><Download /> 下載預印本</Button>
+            <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}`} />} className="download-button"><Download /> 下載預印本 PDF</Button>
+            {preprint.status === 'published' && preprint.finalName && <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}?version=final`} />} className="download-button"><Download /> 下載正式 PDF</Button>}
+            {currentUser?.id === preprint.submitterUserId && ['accepted', 'published'].includes(preprint.status) && <FinalPdfUpload submissionId={preprint.id} existingName={preprint.finalName} />}
             {preprint.status !== 'published' && <Button nativeButton={false} render={<a href="/review" />} variant="outline"><MessageSquareText /> 參與審查</Button>}
           </aside>
         </div>

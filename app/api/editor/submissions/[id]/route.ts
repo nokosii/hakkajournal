@@ -13,6 +13,10 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const issueId = String(body.issueId ?? '').trim() || null;
   if (!title || abstract.length < 80) return Response.json({ error: '題名與摘要為必填。' }, { status: 400 });
   if (status === 'published' && (!issueId || articleBody.length < 100)) return Response.json({ error: '正式發布前，請指定卷期並完成至少 100 字的文章正文。' }, { status: 400 });
+  if (status === 'published') {
+    const finalPdf = await query<{ finalName: string | null }>('SELECT final_name AS "finalName" FROM submissions WHERE id = $1', [id]);
+    if (!finalPdf.rows[0]?.finalName) return Response.json({ error: '正式發布前，請先請作者上傳最終版本 PDF。' }, { status: 400 });
+  }
   await query(`UPDATE submissions SET title=$2, title_en=$3, abstract=$4, abstract_en=$5, keywords=$6,
     article_body=$7, pages=$8, doi=$9, issue_id=$10, status=$11, editor_notes=$12,
     published_at=CASE WHEN $11='published' THEN COALESCE(published_at,NOW()) ELSE published_at END,

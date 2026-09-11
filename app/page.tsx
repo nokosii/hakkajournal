@@ -53,31 +53,31 @@ export default async function Home() {
       <section className="community-hero">
         <div className="hero-copy">
           <p className="eyebrow">COMMUNITY-LED · DIAMOND OPEN ACCESS</p>
-          <h1>客家研究，<br /><em>由社群共同評議。</em></h1>
+          <h1>讓客家經驗，<br /><em>進入數位時代的知識對話。</em></h1>
           <p className="intro">
-            《客家與數位人文期刊》是一個由研究社群主導的公開出版平台。會員先公開預印本，再由推薦者邀請同儕審查；審查、修訂與推薦紀錄全程可讀、可引用。
+            《客家與數位人文期刊》關注客家如何在遷徙、地方社會、語言、制度與科技變遷中持續形成。歡迎以歷史文獻、田野材料、語言資料、數位方法與理論對話，提出可被檢驗、延伸與引用的研究。
           </p>
           <div className="hero-actions">
             <Button nativeButton={false} render={<a href="/submit" />} size="lg" className="primary-cta">會員投稿 <ArrowRight /></Button>
             <Button nativeButton={false} render={<a href="/review" />} size="lg" variant="outline">參與審稿</Button>
           </div>
-          <p className="access-note"><CheckCircle2 /> 不收投稿費，不收文章處理費（APC），成果永久開放取用。</p>
+          <p className="access-note"><CheckCircle2 /> 不收投稿費與文章處理費（APC）；預印本、審查紀錄及正式文章皆開放閱讀。</p>
         </div>
         <aside className="principles-card" aria-label="期刊運作原則">
           <p className="card-kicker">JHDH / OPEN PROCESS</p>
-          <h2>投稿不是投進黑箱，<br />而是加入一場學術對話。</h2>
+          <h2>研究不只保存客家，<br />更要解釋客家如何改變。</h2>
           <ol>
-            <li><span>01</span><div><b>預印本</b><small>作者提交可公開閱讀的研究稿件</small></div></li>
-            <li><span>02</span><div><b>公開審查</b><small>會員審稿，意見與回覆同步保存</small></div></li>
-            <li><span>03</span><div><b>推薦發表</b><small>推薦文字與完整版本紀錄一併出版</small></div></li>
+            <li><span>01</span><div><b>從材料提出問題</b><small>讓歷史、語言、田野與數位資料彼此對話</small></div></li>
+            <li><span>02</span><div><b>讓社群參與知識形成</b><small>共同檢視資料使用、研究觀點與倫理選擇</small></div></li>
+            <li><span>03</span><div><b>留下可追溯的引用紀錄</b><small>預印本、審查、修訂、推薦與正式文章一併保存</small></div></li>
           </ol>
         </aside>
       </section>
 
       <section className="member-strip" aria-label="會員權利">
-        <div><FileText /><p><b>所有註冊會員皆可投稿</b><span>跨領域研究、數位方法、資料與評論皆歡迎</span></p></div>
-        <div><MessagesSquare /><p><b>所有註冊會員皆可審稿</b><span>依專長認領或接受邀請，揭露利益衝突</span></p></div>
-        <div><Users /><p><b>編輯協調，社群決定</b><span>審查紀錄公開，推薦理由具名且可引用</span></p></div>
+        <div><FileText /><p><b>跨領域的客家研究皆可投稿</b><span>歷史、語言、文化、社會、空間、資料庫與人工智慧</span></p></div>
+        <div><MessagesSquare /><p><b>所有註冊會員皆可參與審稿</b><span>讓不同世代、地區與方法的觀點相互檢驗</span></p></div>
+        <div><Users /><p><b>每一步研究歷程都可閱讀</b><span>審查與推薦公開，正式成果更容易被發現與引用</span></p></div>
       </section>
 
       <section className="current-issue" aria-labelledby="latest-issue-heading">
@@ -116,7 +116,7 @@ export default async function Home() {
 
       <section className="open-record" id="open-record">
         <div className="section-heading">
-          <div><p className="eyebrow">OPEN REVIEW RECORD</p><h2>進行中的公開評議</h2></div>
+          <div><p className="eyebrow">OPEN REVIEW RECORD</p><h2>正在形成的客家研究</h2></div>
           <a href="/articles">查看全部紀錄 <ArrowRight /></a>
         </div>
         <article className="record-card">
@@ -142,8 +142,8 @@ export default async function Home() {
       <section className="editorial-section" id="editorial">
         <div>
           <p className="eyebrow">EDITORIAL COMMUNITY</p>
-          <h2>由熟悉客家社群與數位方法的研究者共同維護</h2>
-          <p>編輯團隊負責範圍檢核、指定推薦者與確保程序公平；學術判斷建立在公開的同儕意見、作者回覆與推薦文字之上。</p>
+          <h2>在客家經驗與數位方法之間，建立可被檢驗的研究</h2>
+          <p>數位工具能擴大語料保存、地方記憶與跨區比較，也帶來資料由誰提供、誰能使用與如何解釋的問題。本刊重視社群參與、資料權利與數位倫理，鼓勵研究者讓材料與理論彼此對話，而非只套用既有答案。</p>
         </div>
         <div className="editorial-board">
           <div className="chief-editor"><span>主編 · EDITOR-IN-CHIEF</span><strong>張陳基</strong></div>
@@ -153,8 +153,8 @@ export default async function Home() {
 
       <section className="mission" id="about">
         <p className="eyebrow">OUR COMMITMENT</p>
-        <blockquote>知識公開，審查透明，<br />出版回到學術社群手中。</blockquote>
-        <p>社群主導 · 公開同儕審查 · 鑽石開放取用 · 無 APC</p>
+        <blockquote>保存材料，更要提出問題；<br />運用科技，也要回到社群。</blockquote>
+        <p>讓客家研究可閱讀 · 可驗證 · 可延伸 · 可引用</p>
       </section>
       <SiteFooter />
     </main>

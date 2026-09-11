@@ -9,12 +9,42 @@ import {
 import { Button } from '@/components/ui/button';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
+import { query } from '@/lib/db';
 import { articles } from '@/lib/journal-data';
 
 const editors = ['張維安', '楊長鎮', '俞龍通', '李筑軒', '范以欣', '李志成'];
 
-export default function Home() {
+type PublishedIssue = {
+  id: string;
+  volume: number;
+  number: number;
+  year: number;
+  title: string;
+  description: string;
+  publishedAt: string;
+  articleCount: number;
+};
+
+type PublishedArticle = {
+  id: string;
+  title: string;
+  titleEn: string | null;
+  authorName: string;
+  category: string;
+  abstract: string;
+  pages: string | null;
+  doi: string | null;
+};
+
+export const dynamic = 'force-dynamic';
+
+export default async function Home() {
   const featured = articles[0];
+  const issues = await query<PublishedIssue>(`SELECT i.id,i.volume,i.number,i.year,i.title,i.description,i.published_at AS "publishedAt",COUNT(s.id)::int AS "articleCount" FROM issues i LEFT JOIN submissions s ON s.issue_id=i.id AND s.status='published' WHERE i.status='published' GROUP BY i.id ORDER BY i.volume DESC,i.number DESC`);
+  const latestIssue = issues.rows[0];
+  const latestArticles = latestIssue
+    ? await query<PublishedArticle>(`SELECT id,title,title_en AS "titleEn",author_name AS "authorName",category,abstract,pages,doi FROM submissions WHERE issue_id=$1 AND status='published' ORDER BY published_at,id`, [latestIssue.id])
+    : { rows: [] as PublishedArticle[], rowCount: 0 };
 
   return (
     <main>
@@ -48,6 +78,40 @@ export default function Home() {
         <div><FileText /><p><b>所有註冊會員皆可投稿</b><span>跨領域研究、數位方法、資料與評論皆歡迎</span></p></div>
         <div><MessagesSquare /><p><b>所有註冊會員皆可審稿</b><span>依專長認領或接受邀請，揭露利益衝突</span></p></div>
         <div><Users /><p><b>編輯協調，社群決定</b><span>審查紀錄公開，推薦理由具名且可引用</span></p></div>
+      </section>
+
+      <section className="current-issue" aria-labelledby="latest-issue-heading">
+        <div className="section-heading latest-issue-heading">
+          <div>
+            <p className="eyebrow">LATEST ISSUE</p>
+            <h2 id="latest-issue-heading">最新一期</h2>
+          </div>
+          <a href={latestIssue ? `/issues/${latestIssue.id}` : '/issues'}>查看期刊卷期 <ArrowRight /></a>
+        </div>
+        {latestIssue ? <>
+          <header className="latest-issue-summary">
+            <div className="latest-issue-number"><span>VOL.</span><strong>{String(latestIssue.volume).padStart(2, '0')}</strong><small>NO. {latestIssue.number}</small></div>
+            <div>
+              <p>{latestIssue.year} · 正式出版 · {latestArticles.rows.length} 篇文章</p>
+              <h3>{latestIssue.title}</h3>
+              {latestIssue.description && <p className="latest-issue-description">{latestIssue.description}</p>}
+            </div>
+          </header>
+          <div className="latest-article-list">
+            {latestArticles.rows.map((article, index) => <article className="article-row latest-article-row" key={article.id}>
+              <span className="article-index">{String(index + 1).padStart(2, '0')}</span>
+              <div>
+                <p className="article-type">{article.category}</p>
+                <h3><a href={`/articles/${article.id}`}>{article.title}</a></h3>
+                {article.titleEn && <p className="article-en">{article.titleEn}</p>}
+                <p className="authors">{article.authorName}{article.doi && ` · DOI ${article.doi}`}</p>
+                <p className="latest-article-abstract">{article.abstract}</p>
+              </div>
+              <span className="pages">{article.pages || '全文'}</span>
+              <a href={`/articles/${article.id}`} aria-label={`閱讀正式文章：${article.title}`}><ArrowRight /></a>
+            </article>)}
+          </div>
+        </> : <div className="empty-state latest-issue-empty"><BookOpen /><h3>尚無已發布卷期</h3><p>首期正式發布後，文章內容會自動顯示於首頁。</p><a href="/articles">先瀏覽預印本與公開審查</a></div>}
       </section>
 
       <section className="open-record" id="open-record">

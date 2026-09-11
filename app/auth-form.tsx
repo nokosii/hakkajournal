@@ -28,6 +28,6 @@ export function AuthForm({ mode, returnTo = '/' }: { mode: 'login' | 'register';
     <label><span>密碼 *</span><Input name="password" type="password" required minLength={12} autoComplete={isRegister ? 'new-password' : 'current-password'} /></label>
     {isRegister && <p className="form-hint">密碼至少 12 個字元。註冊後即可投稿與參與公開審查。</p>}
     {error && <p className="form-error" role="alert">{error}</p>}
-    <Button type="submit" size="lg" disabled={loading}>{loading ? <><LoaderCircle className="spin" /> 處理中</> : isRegister ? <><UserPlus /> 建立會員帳號</> : <><LogIn /> 登入</>}</Button>
+    <Button type="submit" size="lg" className="primary-cta" disabled={loading}>{loading ? <><LoaderCircle className="spin" /> 處理中</> : isRegister ? <><UserPlus /> 建立會員帳號</> : <><LogIn /> 登入</>}</Button>
   </form>;
 }

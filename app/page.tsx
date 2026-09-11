@@ -28,7 +28,7 @@ export default function Home() {
             《客家與數位人文期刊》是一個由研究社群主導的公開出版平台。會員先公開預印本，再由推薦者邀請同儕審查；審查、修訂與推薦紀錄全程可讀、可引用。
           </p>
           <div className="hero-actions">
-            <Button nativeButton={false} render={<a href="/submit" />} size="lg">會員投稿 <ArrowRight /></Button>
+            <Button nativeButton={false} render={<a href="/submit" />} size="lg" className="primary-cta">會員投稿 <ArrowRight /></Button>
             <Button nativeButton={false} render={<a href="/review" />} size="lg" variant="outline">參與審稿</Button>
           </div>
           <p className="access-note"><CheckCircle2 /> 不收投稿費，不收文章處理費（APC），成果永久開放取用。</p>

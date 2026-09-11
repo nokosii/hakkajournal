@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 type Article = { id: string; title: string; titleEn: string | null; authorName: string; affiliation: string | null; category: string; abstract: string; abstractEn: string | null; keywords: string | null; articleBody: string; pages: string | null; doi: string | null; publishedAt: string; volume: number; number: number; year: number; issueTitle: string };
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }): Promise<Metadata> {
-  const { id } = await params; if (!process.env.DATABASE_URL) return { title: '文章｜客家與數位人文期刊' };
+  const { id } = await params;
   const result = await query<{ title: string; abstract: string }>("SELECT title,abstract FROM submissions WHERE id=$1 AND status='published'", [id]);
   return result.rows[0] ? { title: `${result.rows[0].title}｜客家與數位人文期刊`, description: result.rows[0].abstract, openGraph: { images: [] }, twitter: { images: [] } } : { title: '找不到文章｜客家與數位人文期刊' };
 }

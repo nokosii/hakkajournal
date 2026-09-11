@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { Pool, type QueryResultRow } from 'pg';
 import type { PGlite } from '@electric-sql/pglite';
+import { executeGoogleStoreQuery, googleStoreConfigured } from '@/lib/google-store';
 
 declare global {
   // eslint-disable-next-line no-var
@@ -43,6 +44,7 @@ async function getLocalDatabase() {
 }
 
 export async function query<T extends QueryResultRow>(text: string, values: unknown[] = []): Promise<{ rows: T[]; rowCount: number }> {
+  if (googleStoreConfigured()) return executeGoogleStoreQuery<T>(text, values);
   if (process.env.DATABASE_URL) {
     const result = await getPool().query<T>(text, values);
     return { rows: result.rows, rowCount: result.rowCount ?? 0 };

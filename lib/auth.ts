@@ -43,7 +43,7 @@ export async function clearSession() {
 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  if (!token || !process.env.DATABASE_URL) return null;
+  if (!token) return null;
   const tokenHash = createHash('sha256').update(token).digest('hex');
   const result = await query<CurrentUser>(`SELECT u.id, u.email, u.display_name AS "displayName", u.affiliation, u.expertise, u.role
     FROM sessions s JOIN users u ON u.id = s.user_id

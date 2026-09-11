@@ -7,6 +7,8 @@ import { SiteFooter } from '@/components/site-footer';
 import { Button } from '@/components/ui/button';
 import { FinalPdfUpload } from './final-pdf-upload';
 import { AiReviewPanel } from '@/components/ai-review-panel';
+import { AuthorResponseForm } from '@/components/author-response-form';
+import { RevisionUpload } from '@/components/revision-upload';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,6 +22,8 @@ type Review = {
   id: string; reviewerName: string; isAnonymous: boolean; recommendation: string; scores: Array<number | null>;
   academicStrengths: string; requiredRevisions: string; otherSuggestions: string; createdAt: string;
 };
+type ReviewResponse = { reviewId: string; responseText: string; updatedAt: string };
+type Revision = { id: string; fileName: string; changeSummary: string; createdAt: string };
 
 const recommendationLabels: Record<string, string> = {
   accept: '直接推薦', minor_revision: '修正後推薦',
@@ -38,13 +42,22 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
   ]);
   const preprint = preprints.rows[0];
   if (!preprint) notFound();
-  const reviewRows = await query(`SELECT id,CASE WHEN is_anonymous THEN '匿名審查人' ELSE reviewer_name END AS "reviewerName",
-    is_anonymous AS "isAnonymous",recommendation,
-    ARRAY[score_relevance,score_contribution,score_literature,score_method,score_structure,score_ethics] AS scores,
-    academic_strengths AS "academicStrengths",required_revisions AS "requiredRevisions",
-    other_suggestions AS "otherSuggestions",created_at AS "createdAt"
-    FROM reviews WHERE submission_id=$1 ORDER BY created_at`, [id]);
+  const [reviewRows, responseRows, revisionRows] = await Promise.all([
+    query(`SELECT id,CASE WHEN is_anonymous THEN '匿名審查人' ELSE reviewer_name END AS "reviewerName",
+      is_anonymous AS "isAnonymous",recommendation,
+      ARRAY[score_relevance,score_contribution,score_literature,score_method,score_structure,score_ethics] AS scores,
+      academic_strengths AS "academicStrengths",required_revisions AS "requiredRevisions",
+      other_suggestions AS "otherSuggestions",created_at AS "createdAt"
+      FROM reviews WHERE submission_id=$1 ORDER BY created_at`, [id]),
+    query<ReviewResponse>(`SELECT review_id AS "reviewId", response_text AS "responseText", updated_at AS "updatedAt"
+      FROM review_responses WHERE submission_id=$1 ORDER BY created_at`, [id]),
+    query<Revision>(`SELECT id,file_name AS "fileName",change_summary AS "changeSummary",created_at AS "createdAt"
+      FROM submission_revisions WHERE submission_id=$1 ORDER BY created_at`, [id]),
+  ]);
   const reviews = reviewRows.rows as Review[];
+  const responses = responseRows.rows;
+  const revisions = revisionRows.rows;
+  const isAuthor = currentUser?.id === preprint.submitterUserId;
 
   return (
     <main>
@@ -63,12 +76,14 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
             <section><h2>摘要</h2><p>{preprint.abstract}</p></section>
             {preprint.abstractEn && <section><h2>Abstract</h2><p className="abstract-en">{preprint.abstractEn}</p></section>}
             <section><h2>關鍵字</h2><div className="keyword-row">{(preprint.keywords ?? '').split(/[、,]/).filter(Boolean).map((keyword) => <span key={keyword}>{keyword.trim()}</span>)}</div></section>
-            {currentUser?.id === preprint.submitterUserId && <AiReviewPanel submissionId={preprint.id} context="author" />}
+            {isAuthor && <AiReviewPanel submissionId={preprint.id} context="author" />}
+            <section className="version-history"><h2>稿件版本紀錄</h2><article><div><b>初始預印本</b><span>{new Date(preprint.createdAt).toLocaleDateString('zh-TW')}</span></div><a href={`/api/manuscripts/${preprint.id}`}>下載 PDF</a></article>{revisions.map((revision, index) => <article key={revision.id}><div><b>修正稿第 {index + 1} 版</b><span>{new Date(revision.createdAt).toLocaleDateString('zh-TW')} · {revision.fileName}</span><p>{revision.changeSummary}</p></div><a href={`/api/manuscripts/${preprint.id}?version=revision&revisionId=${revision.id}`}>下載 PDF</a></article>)}{isAuthor && ['open_review', 'revision'].includes(preprint.status) && <RevisionUpload submissionId={preprint.id} />}</section>
             <section className="public-reviews">
               <h2>公開審查紀錄</h2>
               {reviews.length ? reviews.map((review) => {
                 const scored = review.scores.filter((score): score is number => score !== null);
                 const avg = scored.length ? (scored.reduce((sum, score) => sum + score, 0) / scored.length).toFixed(1) : '—';
+                const authorResponse = responses.find((response) => response.reviewId === review.id);
                 return <article key={review.id}>
                   <header><div><b>{review.reviewerName}</b><span>{review.isAnonymous ? '匿名' : '具名'}審查 · 平均 {avg}</span></div><strong>{recommendationLabels[review.recommendation]}</strong></header>
                   <div className="published-scores">{review.scores.map((score, index) => <span key={scoreLabels[index]}>{scoreLabels[index]} <b>{score ?? 'N/A'}</b></span>)}</div>
@@ -76,6 +91,8 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
                   <h3>必要修改</h3><p>{review.requiredRevisions}</p>
                   {review.otherSuggestions && <><h3>其他建議</h3><p>{review.otherSuggestions}</p></>}
                   <small>{new Date(review.createdAt).toLocaleDateString('zh-TW')}</small>
+                  {authorResponse && <section className="author-response"><div><b>作者回應</b><span>{new Date(authorResponse.updatedAt).toLocaleDateString('zh-TW')}</span></div><p>{authorResponse.responseText}</p></section>}
+                  {isAuthor && <AuthorResponseForm reviewId={review.id} existingResponse={authorResponse?.responseText ?? null} />}
                 </article>;
               }) : <div className="no-reviews"><MessageSquareText /><p><b>尚無審查意見</b><br />本稿正在徵求具相關專長的會員審查。</p></div>}
             </section>
@@ -85,7 +102,7 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
             <dl><dt>稿件編號</dt><dd>{preprint.id}</dd><dt>提交日期</dt><dd>{new Date(preprint.createdAt).toLocaleDateString('zh-TW')}</dd><dt>投稿管道</dt><dd>{preprint.submissionChannel === 'assisted_email' ? '編輯部協助登錄' : '會員線上投稿'}</dd><dt>狀態</dt><dd>{preprint.status === 'published' ? '正式出版' : '公開審查'}</dd><dt>審查</dt><dd>{reviews.length} 份公開意見</dd><dt>授權</dt><dd>CC BY 4.0</dd></dl>
             <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}`} />} className="download-button"><Download /> 下載預印本 PDF</Button>
             {preprint.status === 'published' && preprint.finalName && <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}?version=final`} />} className="download-button"><Download /> 下載正式 PDF</Button>}
-            {currentUser?.id === preprint.submitterUserId && ['accepted', 'published'].includes(preprint.status) && <FinalPdfUpload submissionId={preprint.id} existingName={preprint.finalName} />}
+            {isAuthor && ['accepted', 'published'].includes(preprint.status) && <FinalPdfUpload submissionId={preprint.id} existingName={preprint.finalName} />}
             {preprint.status !== 'published' && <Button nativeButton={false} render={<a href="/review" />} variant="outline"><MessageSquareText /> 參與審查</Button>}
           </aside>
         </div>

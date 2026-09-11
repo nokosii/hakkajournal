@@ -3,10 +3,22 @@ import { query } from '@/lib/db';
 
 type Manuscript = { preprintData: Buffer; preprintName: string; preprintType: string };
 type FinalManuscript = { submitterUserId: string; status: string; finalData: Buffer | null; finalName: string | null; finalType: string | null };
+type RevisionManuscript = { fileData: Buffer; fileName: string; fileType: string; status: string };
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  if (new URL(request.url).searchParams.get('version') === 'final') {
+  const searchParams = new URL(request.url).searchParams;
+  if (searchParams.get('version') === 'revision') {
+    const revisionId = searchParams.get('revisionId');
+    if (!revisionId) return Response.json({ error: '缺少修正稿版本編號。' }, { status: 400 });
+    const result = await query<RevisionManuscript>(`SELECT r.file_data AS "fileData",r.file_name AS "fileName",
+      r.file_type AS "fileType",s.status FROM submission_revisions r JOIN submissions s ON s.id=r.submission_id
+      WHERE r.id=$1 AND r.submission_id=$2 AND s.status <> 'rejected'`, [revisionId, id]);
+    const record = result.rows[0];
+    if (!record) return Response.json({ error: '找不到修正稿版本。' }, { status: 404 });
+    return new Response(new Uint8Array(record.fileData), { headers: { 'content-type': record.fileType, 'content-disposition': `attachment; filename*=UTF-8''${encodeURIComponent(record.fileName)}` } });
+  }
+  if (searchParams.get('version') === 'final') {
     const result = await query<FinalManuscript>(`SELECT submitter_user_id AS "submitterUserId", status,
       final_data AS "finalData", final_name AS "finalName", final_type AS "finalType"
       FROM submissions WHERE id = $1`, [id]);

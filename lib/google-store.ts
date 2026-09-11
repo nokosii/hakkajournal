@@ -15,6 +15,8 @@ const tables = {
   ISSUES: ['id', 'volume', 'number', 'year', 'title', 'description', 'status', 'published_at', 'created_by', 'created_at'],
   SUBMISSIONS: ['id', 'submitter_user_id', 'title', 'title_en', 'author_name', 'affiliation', 'category', 'abstract', 'abstract_en', 'keywords', 'author_email', 'submission_channel', 'preprint_file_id', 'preprint_name', 'preprint_type', 'final_file_id', 'final_name', 'final_type', 'final_uploaded_at', 'status', 'editor_notes', 'article_body', 'pages', 'doi', 'issue_id', 'published_at', 'created_at', 'updated_at'],
   REVIEWS: ['id', 'submission_id', 'reviewer_user_id', 'reviewer_name', 'score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics', 'academic_strengths', 'required_revisions', 'other_suggestions', 'recommendation', 'conflict_statement', 'is_anonymous', 'created_at'],
+  RESPONSES: ['id', 'review_id', 'submission_id', 'author_user_id', 'response_text', 'created_at', 'updated_at'],
+  REVISIONS: ['id', 'submission_id', 'uploader_user_id', 'file_id', 'file_name', 'file_type', 'article_body', 'change_summary', 'created_at'],
 } as const;
 
 type TableName = keyof typeof tables;
@@ -37,6 +39,8 @@ declare global {
   var __jhdhGooglePreprintsFolderId: string | undefined;
   // eslint-disable-next-line no-var
   var __jhdhGoogleFinalsFolderId: string | undefined;
+  // eslint-disable-next-line no-var
+  var __jhdhGoogleRevisionsFolderId: string | undefined;
 }
 
 export function googleStoreConfigured() {
@@ -103,7 +107,7 @@ async function googleFetch(url: string, init: RequestInit = {}) {
 }
 
 function emptyDatabase(): DriveDatabase {
-  return { version: 1, USERS: [], SESSIONS: [], ISSUES: [], SUBMISSIONS: [], REVIEWS: [] };
+  return { version: 1, USERS: [], SESSIONS: [], ISSUES: [], SUBMISSIONS: [], REVIEWS: [], RESPONSES: [], REVISIONS: [] };
 }
 
 function normalizeDatabase(input: unknown): DriveDatabase {
@@ -236,6 +240,7 @@ async function ensureGoogleStore() {
       }
       global.__jhdhGooglePreprintsFolderId = await ensureFolder(folderId, 'preprints');
       global.__jhdhGoogleFinalsFolderId = await ensureFolder(folderId, 'final-articles');
+      global.__jhdhGoogleRevisionsFolderId = await ensureFolder(folderId, 'revisions');
       const changed = await bootstrapEditor();
       if (!remote || changed) await persistDatabase();
     })();
@@ -314,6 +319,10 @@ async function uploadPreprint(name: string, mimeType: string, data: Buffer) {
 
 async function uploadFinalPdf(name: string, mimeType: string, data: Buffer, existingFileId: string) {
   return uploadDocument(global.__jhdhGoogleFinalsFolderId, '正式文章', name, mimeType, data, existingFileId);
+}
+
+async function uploadRevisionPdf(name: string, mimeType: string, data: Buffer) {
+  return uploadDocument(global.__jhdhGoogleRevisionsFolderId, '修正稿', name, mimeType, data);
 }
 
 async function downloadDocument(fileId: string) {
@@ -400,6 +409,10 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], author_email: values[10], submission_channel: values[11], preprint_file_id: fileId, preprint_name: values[13], preprint_type: values[14], final_file_id: '', final_name: '', final_type: '', final_uploaded_at: '', status: 'open_review', editor_notes: '', article_body: values[15], pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
     return result([], 1);
   });
+  if (statement.startsWith('select id,title,category,status,created_at as "createdat"') && statement.includes('where submitter_user_id = $1')) {
+    const submissions = await readRecords('SUBMISSIONS');
+    return result(submissions.filter((item) => item.submitter_user_id === values[0]).sort((a, b) => b.created_at.localeCompare(a.created_at)).map((item) => ({ id: item.id, title: item.title, category: item.category, status: item.status, createdAt: item.created_at })));
+  }
   if (statement.includes('from submissions s left join reviews r') && statement.includes("where s.status in ('open_review', 'revision', 'accepted', 'published')")) {
     const [submissions, reviews] = await Promise.all([readRecords('SUBMISSIONS'), readRecords('REVIEWS')]);
     const visible = new Set(['open_review', 'revision', 'accepted', 'published']);
@@ -441,6 +454,12 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     if (!submission) return result([]);
     return result([{ preprintData: await downloadDocument(submission.preprint_file_id), preprintName: submission.preprint_name, preprintType: submission.preprint_type }]);
   }
+  if (statement.startsWith('select r.file_data as "filedata"') && statement.includes('from submission_revisions r join submissions s')) {
+    const [revisions, submissions] = await Promise.all([readRecords('REVISIONS'), readRecords('SUBMISSIONS')]);
+    const revision = revisions.find((item) => item.id === values[0] && item.submission_id === values[1]);
+    const submission = revision ? submissions.find((item) => item.id === revision.submission_id && item.status !== 'rejected') : undefined;
+    return result(revision && submission ? [{ fileData: await downloadDocument(revision.file_id), fileName: revision.file_name, fileType: revision.file_type, status: submission.status }] : []);
+  }
   if (statement.startsWith('select id,title,title_en as "titleen",author_name as "authorname"') && statement.includes("from submissions where id=$1 and status <> 'rejected'")) {
     const submissions = await readRecords('SUBMISSIONS');
     const item = submissions.find((row) => row.id === values[0] && ['open_review', 'revision', 'accepted', 'published'].includes(row.status));
@@ -470,6 +489,10 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     await updateRecord('SUBMISSIONS', 'id', String(values[0]), { final_file_id: fileId, final_name: values[2], final_type: values[3], final_uploaded_at: now(), article_body: values[4], updated_at: now() });
     return result([], 1);
   });
+  if (statement.startsWith('update submissions set article_body = $2')) return withWriteLock(async () => {
+    const updated = await updateRecord('SUBMISSIONS', 'id', String(values[0]), { article_body: values[1], updated_at: now() });
+    return result([], updated ? 1 : 0);
+  });
   if (statement.startsWith('update submissions set title=')) return withWriteLock(async () => {
     const submissions = await readRecords('SUBMISSIONS');
     const current = submissions.find((item) => item.id === values[0]);
@@ -495,6 +518,12 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     return result(submissions.filter((item) => item.issue_id === values[0] && item.status === 'published').sort((a, b) => (a.published_at || a.id).localeCompare(b.published_at || b.id)).map((item) => ({ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, category: item.category, abstract: item.abstract, pages: nullable(item.pages), doi: nullable(item.doi) })));
   }
 
+  if (statement.startsWith('select r.id as "reviewid"') && statement.includes('from reviews r join submissions s')) {
+    const [reviews, submissions] = await Promise.all([readRecords('REVIEWS'), readRecords('SUBMISSIONS')]);
+    const review = reviews.find((item) => item.id === values[0]);
+    const submission = review ? submissions.find((item) => item.id === review.submission_id) : undefined;
+    return result(review && submission ? [{ reviewId: review.id, submissionId: review.submission_id, submitterUserId: submission.submitter_user_id }] : []);
+  }
   if (statement.startsWith('insert into reviews')) return withWriteLock(async () => {
     const reviews = await readRecords('REVIEWS');
     if (reviews.some((review) => review.submission_id === values[1] && review.reviewer_user_id === values[2])) {
@@ -507,6 +536,29 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     const reviews = await readRecords('REVIEWS');
     return result(reviews.filter((review) => review.submission_id === values[0]).sort((a, b) => a.created_at.localeCompare(b.created_at)).map(publicReview));
   }
+  if (statement.startsWith('select review_id as "reviewid"') && statement.includes('from review_responses where submission_id')) {
+    const responses = await readRecords('RESPONSES');
+    return result(responses.filter((item) => item.submission_id === values[0]).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((item) => ({ reviewId: item.review_id, responseText: item.response_text, updatedAt: item.updated_at })));
+  }
+  if (statement.startsWith('insert into review_responses')) return withWriteLock(async () => {
+    const responses = await readRecords('RESPONSES');
+    const existing = responses.find((item) => item.review_id === values[1]);
+    if (existing) {
+      await updateRecord('RESPONSES', 'id', existing.id, { response_text: values[4], updated_at: now() });
+    } else {
+      await appendRecord('RESPONSES', { id: values[0], review_id: values[1], submission_id: values[2], author_user_id: values[3], response_text: values[4], created_at: now(), updated_at: now() });
+    }
+    return result([], 1);
+  });
+  if (statement.startsWith('select id,file_name as "filename"') && statement.includes('from submission_revisions where submission_id')) {
+    const revisions = await readRecords('REVISIONS');
+    return result(revisions.filter((item) => item.submission_id === values[0]).sort((a, b) => a.created_at.localeCompare(b.created_at)).map((item) => ({ id: item.id, fileName: item.file_name, changeSummary: item.change_summary, createdAt: item.created_at })));
+  }
+  if (statement.startsWith('insert into submission_revisions')) return withWriteLock(async () => {
+    const fileId = await uploadRevisionPdf(String(values[4]), String(values[5]), values[3] as Buffer);
+    await appendRecord('REVISIONS', { id: values[0], submission_id: values[1], uploader_user_id: values[2], file_id: fileId, file_name: values[4], file_type: values[5], article_body: values[6], change_summary: values[7], created_at: now() });
+    return result([], 1);
+  });
 
   if (statement.startsWith('insert into issues')) return withWriteLock(async () => {
     const issues = await readRecords('ISSUES');

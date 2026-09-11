@@ -23,7 +23,7 @@ const NUMBERED_HEADING = /^(第[一二三四五六七八九十百0-9]+[章節]|[
 const BULLET = /^(?:[•●▪◦]|[-–—])\s*/;
 
 function pdfJsDataUrl(folder: 'cmaps' | 'standard_fonts' | 'wasm') {
-  const require = createRequire(import.meta.url);
+  const require = createRequire(path.join(process.cwd(), 'package.json'));
   const packageRoot = path.dirname(require.resolve('pdfjs-dist/package.json')).replaceAll('\\', '/');
   return `${packageRoot}/${folder}/`;
 }

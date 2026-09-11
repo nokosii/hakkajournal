@@ -11,7 +11,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { articles } from '@/lib/journal-data';
 
-const editors = ['楊長鎮', '俞龍通', '張陳基', '李筑軒', '范以欣', '李志成'];
+const editors = ['楊長鎮', '俞龍通', '張維安', '李筑軒', '范以欣', '李志成'];
 
 export default function Home() {
   const featured = articles[0];
@@ -82,7 +82,7 @@ export default function Home() {
           <p>編輯團隊負責範圍檢核、指定推薦者與確保程序公平；學術判斷建立在公開的同儕意見、作者回覆與推薦文字之上。</p>
         </div>
         <div className="editorial-board">
-          <div className="chief-editor"><span>主編 · EDITOR-IN-CHIEF</span><strong>張維安</strong></div>
+          <div className="chief-editor"><span>主編 · EDITOR-IN-CHIEF</span><strong>張陳基</strong></div>
           <div className="editors"><span>編輯 · EDITORS</span><ul>{editors.map((editor) => <li key={editor}>{editor}</li>)}</ul></div>
         </div>
       </section>

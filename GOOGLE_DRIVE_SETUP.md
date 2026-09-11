@@ -80,9 +80,9 @@ npm run drive:oauth -- token oauth-client.json "貼上授權碼"
 | `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 用戶端密鑰 |
 | `GOOGLE_OAUTH_REFRESH_TOKEN` | 第五步取得的 refresh token |
 | `SESSION_SECRET` | 至少 32 字元的隨機字串；Blueprint 可自動產生 |
-| `ADMIN_EMAIL` | 張維安主編的登入電子郵件 |
+| `ADMIN_EMAIL` | 張陳基主編的登入電子郵件 |
 | `ADMIN_PASSWORD` | 主編首次登入密碼，至少 12 個字元 |
-| `ADMIN_NAME` | `張維安` |
+| `ADMIN_NAME` | `張陳基` |
 
 重新部署後開啟 `/api/health`。看到 `{"status":"ok"}` 表示 Google Drive 已連線成功。接著檢查 Drive 資料夾，應出現：
 

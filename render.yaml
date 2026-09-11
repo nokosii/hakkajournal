@@ -25,4 +25,4 @@ services:
       - key: ADMIN_PASSWORD
         sync: false
       - key: ADMIN_NAME
-        value: 張維安
+        value: 張陳基

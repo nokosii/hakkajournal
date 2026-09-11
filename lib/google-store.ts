@@ -196,7 +196,7 @@ async function bootstrapEditor() {
     id: randomUUID(),
     email,
     password_hash: `scrypt:${salt}:${key.toString('hex')}`,
-    display_name: process.env.ADMIN_NAME || '張維安',
+    display_name: process.env.ADMIN_NAME || '張陳基',
     affiliation: '',
     expertise: '',
     role: 'editor_in_chief',

@@ -54,7 +54,7 @@
 npm run drive:oauth -- url oauth-client.json
 ```
 
-工具會顯示 `GOOGLE_OAUTH_CLIENT_ID`、`GOOGLE_OAUTH_CLIENT_SECRET` 與一個授權網址：
+工具會顯示 OAuth Client ID 與一個授權網址，但不會在終端顯示 Client Secret：
 
 1. 用保存期刊資料的 Google 帳號開啟授權網址。
 2. 同意 Google Drive 權限。
@@ -66,7 +66,7 @@ npm run drive:oauth -- url oauth-client.json
 npm run drive:oauth -- token oauth-client.json "貼上授權碼"
 ```
 
-工具顯示的結果就是 `GOOGLE_OAUTH_REFRESH_TOKEN`。這些資料都是秘密，請只填入 Render，不要貼到聊天室或提交 GitHub。
+工具會把 Client ID、Client Secret 與新的 Refresh Token 安全寫入 `.data/google-oauth-render.env`，不會把密鑰印在終端。請從該檔案複製三項設定到 Render；`.data/` 已被 Git 排除。這些資料都是秘密，請不要貼到聊天室或提交 GitHub。
 
 ## 六、設定 Render
 

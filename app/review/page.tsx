@@ -1,8 +1,13 @@
 import type { Metadata } from 'next';
-import { ShieldCheck } from 'lucide-react';
+import { UserCheck } from 'lucide-react';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ReviewWorkspace } from './review-workspace';
+import { requireChatGPTUser } from '@/app/chatgpt-auth';
 
-export const metadata: Metadata = { title: '審查專區｜客家與數位人文期刊', description: '受邀審查人線上閱讀匿名稿件並提交審查意見。' };
-export default function ReviewPage() { return <main><SiteHeader /><section className="review-hero"><div><p className="eyebrow">REVIEWER WORKSPACE</p><h1>審查專區</h1><p>您好，審查人。感謝您協助守護跨領域研究的學術品質。</p></div><span><ShieldCheck /> 已通過邀請連結驗證</span></section><section className="review-section"><ReviewWorkspace /></section><SiteFooter /></main>; }
+export const metadata: Metadata = { title: '公開審查｜客家與數位人文期刊', description: '註冊會員可依專長參與公開同儕審查。' };
+export const dynamic = 'force-dynamic';
+export default async function ReviewPage() {
+  const user = await requireChatGPTUser('/review');
+  return <main><SiteHeader /><section className="review-hero"><div><p className="eyebrow">OPEN PEER REVIEW</p><h1>公開審查</h1><p>所有註冊會員皆可依專長參與；您的姓名、意見與建議將隨評議紀錄公開。</p></div><span><UserCheck /> 已登入會員：{user.displayName}</span></section><section className="review-section"><ReviewWorkspace reviewerName={user.displayName} /></section><SiteFooter /></main>;
+}

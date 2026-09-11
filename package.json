@@ -10,6 +10,7 @@
     "build": "next build",
     "start": "next start",
     "start:render": "next start",
+    "drive:oauth": "node scripts/google-drive-oauth.mjs",
     "db:migrate": "node scripts/migrate.mjs",
     "lint": "oxlint",
     "format": "oxfmt"

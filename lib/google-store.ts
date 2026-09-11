@@ -1,13 +1,13 @@
 import { randomBytes, randomUUID, scrypt as scryptCallback } from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { promisify } from 'node:util';
-import { JWT } from 'google-auth-library';
+import { JWT, OAuth2Client } from 'google-auth-library';
 import type { QueryResultRow } from 'pg';
 
 const scrypt = promisify(scryptCallback);
-const scopes = [
-  'https://www.googleapis.com/auth/drive',
-  'https://www.googleapis.com/auth/spreadsheets',
-];
+const scopes = ['https://www.googleapis.com/auth/drive'];
+const DATABASE_NAME = 'journal-database.json';
 
 const tables = {
   USERS: ['id', 'email', 'password_hash', 'display_name', 'affiliation', 'expertise', 'role', 'status', 'created_at'],
@@ -18,16 +18,23 @@ const tables = {
 } as const;
 
 type TableName = keyof typeof tables;
-type SheetRecord = Record<string, string> & { __rowNumber: string };
+type StoreRecord = Record<string, string>;
+type DriveDatabase = { version: 1 } & Record<TableName, StoreRecord[]>;
 type GoogleQueryResult<T> = { rows: T[]; rowCount: number };
 
 declare global {
   // eslint-disable-next-line no-var
-  var __jhdhGoogleAuth: JWT | undefined;
+  var __jhdhGoogleAuth: Promise<JWT | OAuth2Client> | undefined;
   // eslint-disable-next-line no-var
   var __jhdhGoogleSetup: Promise<void> | undefined;
   // eslint-disable-next-line no-var
   var __jhdhGoogleWriteQueue: Promise<void> | undefined;
+  // eslint-disable-next-line no-var
+  var __jhdhGoogleDatabase: DriveDatabase | undefined;
+  // eslint-disable-next-line no-var
+  var __jhdhGoogleDatabaseFileId: string | undefined;
+  // eslint-disable-next-line no-var
+  var __jhdhGooglePreprintsFolderId: string | undefined;
 }
 
 export function googleStoreConfigured() {
@@ -35,26 +42,53 @@ export function googleStoreConfigured() {
 }
 
 function configuration() {
-  const spreadsheetId = process.env.GOOGLE_SHEET_ID?.trim();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID?.trim();
-  const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL?.trim();
-  const key = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
-  if (!spreadsheetId || !folderId || !email || !key) {
-    throw new Error('Google 儲存尚未完成設定：請檢查 GOOGLE_SHEET_ID、GOOGLE_DRIVE_FOLDER_ID、GOOGLE_SERVICE_ACCOUNT_EMAIL 與 GOOGLE_PRIVATE_KEY。');
-  }
-  return { spreadsheetId, folderId, email, key };
+  if (!folderId) throw new Error('Google 儲存尚未完成設定：缺少 GOOGLE_DRIVE_FOLDER_ID。');
+  return { folderId };
 }
 
-function authClient() {
+async function authClient() {
   if (!global.__jhdhGoogleAuth) {
-    const { email, key } = configuration();
-    global.__jhdhGoogleAuth = new JWT({ email, key, scopes });
+    global.__jhdhGoogleAuth = (async () => {
+      const clientId = process.env.GOOGLE_OAUTH_CLIENT_ID?.trim();
+      const clientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET?.trim();
+      const refreshToken = process.env.GOOGLE_OAUTH_REFRESH_TOKEN?.trim();
+      if (clientId && clientSecret && refreshToken) {
+        const client = new OAuth2Client(clientId, clientSecret);
+        client.setCredentials({ refresh_token: refreshToken });
+        return client;
+      }
+
+      let serviceAccount: { client_email?: string; private_key?: string } | undefined;
+      const encoded = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64?.trim();
+      const raw = process.env.GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON?.trim()
+        || (encoded ? Buffer.from(encoded, 'base64').toString('utf8') : '');
+      if (raw) {
+        try { serviceAccount = JSON.parse(raw); }
+        catch { throw new Error('GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON 格式不正確。'); }
+      } else if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+        serviceAccount = JSON.parse(await fs.readFile(process.env.GOOGLE_APPLICATION_CREDENTIALS, 'utf8'));
+      } else if (process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+        serviceAccount = {
+          client_email: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL,
+          private_key: process.env.GOOGLE_PRIVATE_KEY,
+        };
+      }
+      if (serviceAccount?.client_email && serviceAccount.private_key) {
+        return new JWT({
+          email: serviceAccount.client_email,
+          key: serviceAccount.private_key.replace(/\\n/g, '\n'),
+          scopes,
+        });
+      }
+      throw new Error('Google 儲存尚未完成設定：請設定 OAuth 憑證，或提供服務帳戶 JSON。');
+    })();
   }
-  return global.__jhdhGoogleAuth;
+  return await global.__jhdhGoogleAuth;
 }
 
 async function googleFetch(url: string, init: RequestInit = {}) {
-  const credential = await authClient().getAccessToken();
+  const credential = await (await authClient()).getAccessToken();
   if (!credential.token) throw new Error('無法取得 Google API 存取權杖。');
   const headers = new Headers(init.headers);
   headers.set('authorization', `Bearer ${credential.token}`);
@@ -66,47 +100,99 @@ async function googleFetch(url: string, init: RequestInit = {}) {
   return response;
 }
 
-function sheetRange(table: TableName, range = 'A:ZZ') {
-  return encodeURIComponent(`'${table}'!${range}`);
+function emptyDatabase(): DriveDatabase {
+  return { version: 1, USERS: [], SESSIONS: [], ISSUES: [], SUBMISSIONS: [], REVIEWS: [] };
 }
 
-function columnName(index: number) {
-  let value = index + 1;
-  let name = '';
-  while (value > 0) {
-    value -= 1;
-    name = String.fromCharCode(65 + (value % 26)) + name;
-    value = Math.floor(value / 26);
+function normalizeDatabase(input: unknown): DriveDatabase {
+  const source = input && typeof input === 'object' ? input as Record<string, unknown> : {};
+  const database = emptyDatabase();
+  for (const table of Object.keys(tables) as TableName[]) {
+    const records = Array.isArray(source[table]) ? source[table] : [];
+    database[table] = records.map((record) => {
+      const value = record && typeof record === 'object' ? record as Record<string, unknown> : {};
+      return Object.fromEntries(tables[table].map((field) => [field, value[field] == null ? '' : String(value[field])]));
+    });
   }
-  return name;
+  return database;
 }
 
-async function writeValues(table: TableName, range: string, values: unknown[][]) {
-  const { spreadsheetId } = configuration();
-  await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange(table, range)}?valueInputOption=RAW`, {
-    method: 'PUT',
+function localDatabaseFile() {
+  const directory = path.resolve(/* turbopackIgnore: true */ process.env.DATA_DIR || process.env.RENDER_DISK_MOUNT_PATH || path.join(process.cwd(), '.data'));
+  return { directory, file: path.join(directory, DATABASE_NAME) };
+}
+
+function escapeDriveQuery(value: string) {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+async function findChild(parentId: string, name: string, mimeType = '') {
+  const mimeClause = mimeType ? ` and mimeType = '${escapeDriveQuery(mimeType)}'` : '';
+  const query = `'${escapeDriveQuery(parentId)}' in parents and name = '${escapeDriveQuery(name)}' and trashed = false${mimeClause}`;
+  const response = await googleFetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&pageSize=10&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=files(id,name,mimeType)`);
+  const payload = await response.json() as { files?: Array<{ id: string; name: string; mimeType: string }> };
+  return payload.files?.[0] ?? null;
+}
+
+async function ensureFolder(parentId: string, name: string) {
+  const mimeType = 'application/vnd.google-apps.folder';
+  const existing = await findChild(parentId, name, mimeType);
+  if (existing) return existing.id;
+  const response = await googleFetch('https://www.googleapis.com/drive/v3/files?supportsAllDrives=true&fields=id', {
+    method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ values }),
+    body: JSON.stringify({ name, mimeType, parents: [parentId] }),
   });
+  const payload = await response.json() as { id?: string };
+  if (!payload.id) throw new Error('Google Drive 未回傳資料夾編號。');
+  return payload.id;
 }
 
-async function readRaw(table: TableName) {
-  const { spreadsheetId } = configuration();
-  const response = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange(table)}`);
-  return await response.json() as { values?: unknown[][] };
+async function downloadJson(fileId: string) {
+  const response = await googleFetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media&supportsAllDrives=true`);
+  return normalizeDatabase(await response.json());
+}
+
+function database() {
+  if (!global.__jhdhGoogleDatabase) throw new Error('Google Drive 資料尚未完成載入。');
+  return global.__jhdhGoogleDatabase;
+}
+
+async function persistDatabase() {
+  const { directory, file } = localDatabaseFile();
+  await fs.mkdir(directory, { recursive: true });
+  const contents = JSON.stringify(database(), null, 2);
+  const temporary = `${file}.tmp`;
+  await fs.writeFile(temporary, contents, 'utf8');
+  await fs.rename(temporary, file);
+
+  if (global.__jhdhGoogleDatabaseFileId) {
+    await googleFetch(`https://www.googleapis.com/upload/drive/v3/files/${encodeURIComponent(global.__jhdhGoogleDatabaseFileId)}?uploadType=media&supportsAllDrives=true`, {
+      method: 'PATCH', headers: { 'content-type': 'application/json' }, body: contents,
+    });
+    return;
+  }
+
+  const { folderId } = configuration();
+  const boundary = `jhdh-${randomUUID()}`;
+  const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name: DATABASE_NAME, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: application/json\r\n\r\n`;
+  const suffix = `\r\n--${boundary}--`;
+  const response = await googleFetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&supportsAllDrives=true&fields=id', {
+    method: 'POST', headers: { 'content-type': `multipart/related; boundary=${boundary}` }, body: new Blob([prefix, contents, suffix]),
+  });
+  const payload = await response.json() as { id?: string };
+  if (!payload.id) throw new Error('Google Drive 未回傳資料庫檔案編號。');
+  global.__jhdhGoogleDatabaseFileId = payload.id;
 }
 
 async function bootstrapEditor() {
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
-  if (!email || !password) return;
-  const raw = await readRaw('USERS');
-  const header = (raw.values?.[0] ?? []).map(String);
-  const emailIndex = header.indexOf('email');
-  if (raw.values?.slice(1).some((row) => String(row[emailIndex] ?? '').toLowerCase() === email)) return;
+  if (!email || !password) return false;
+  if (database().USERS.some((user) => user.email.toLowerCase() === email)) return false;
   const salt = randomBytes(16).toString('hex');
   const key = await scrypt(password, salt, 64) as Buffer;
-  await appendRecord('USERS', {
+  database().USERS.push(toRecord('USERS', {
     id: randomUUID(),
     email,
     password_hash: `scrypt:${salt}:${key.toString('hex')}`,
@@ -116,32 +202,27 @@ async function bootstrapEditor() {
     role: 'editor_in_chief',
     status: 'active',
     created_at: new Date().toISOString(),
-  }, false);
+  }));
+  return true;
 }
 
 async function ensureGoogleStore() {
   if (!global.__jhdhGoogleSetup) {
     global.__jhdhGoogleSetup = (async () => {
-      const { spreadsheetId } = configuration();
-      const metadataResponse = await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}?fields=sheets.properties.title`);
-      const metadata = await metadataResponse.json() as { sheets?: Array<{ properties?: { title?: string } }> };
-      const existing = new Set((metadata.sheets ?? []).map((sheet) => sheet.properties?.title).filter(Boolean));
-      const missing = (Object.keys(tables) as TableName[]).filter((name) => !existing.has(name));
-      if (missing.length) {
-        await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}:batchUpdate`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ requests: missing.map((title) => ({ addSheet: { properties: { title } } })) }),
-        });
+      const { folderId } = configuration();
+      await authClient();
+      const remote = await findChild(folderId, DATABASE_NAME);
+      global.__jhdhGoogleDatabaseFileId = remote?.id;
+      if (remote) {
+        global.__jhdhGoogleDatabase = await downloadJson(remote.id);
+      } else {
+        const { file } = localDatabaseFile();
+        try { global.__jhdhGoogleDatabase = normalizeDatabase(JSON.parse(await fs.readFile(/* turbopackIgnore: true */ file, 'utf8'))); }
+        catch { global.__jhdhGoogleDatabase = emptyDatabase(); }
       }
-      for (const table of Object.keys(tables) as TableName[]) {
-        const raw = await readRaw(table);
-        const currentHeader = (raw.values?.[0] ?? []).map(String);
-        const expectedHeader = [...tables[table]];
-        if (!currentHeader.length) await writeValues(table, `A1:${columnName(expectedHeader.length - 1)}1`, [expectedHeader]);
-        else if (currentHeader.join('|') !== expectedHeader.join('|')) throw new Error(`Google 試算表分頁 ${table} 的欄位格式不正確。`);
-      }
-      await bootstrapEditor();
+      global.__jhdhGooglePreprintsFolderId = await ensureFolder(folderId, 'preprints');
+      const changed = await bootstrapEditor();
+      if (!remote || changed) await persistDatabase();
     })();
   }
   return global.__jhdhGoogleSetup;
@@ -149,46 +230,36 @@ async function ensureGoogleStore() {
 
 async function readRecords(table: TableName) {
   await ensureGoogleStore();
-  const raw = await readRaw(table);
-  const [headerValues = [], ...rows] = raw.values ?? [];
-  const headers = headerValues.map(String);
-  return rows.map((row, index) => {
-    const record = Object.fromEntries(headers.map((header, column) => [header, String(row[column] ?? '')])) as SheetRecord;
-    record.__rowNumber = String(index + 2);
-    return record;
-  }).filter((record) => record.id || table === 'SESSIONS' && record.token_hash);
+  return database()[table].map((record) => ({ ...record }));
 }
 
-async function appendRecord(table: TableName, record: Record<string, unknown>, initialize = true) {
-  if (initialize) await ensureGoogleStore();
-  const { spreadsheetId } = configuration();
-  const values = tables[table].map((header) => record[header] == null ? '' : String(record[header]));
-  await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange(table, 'A:ZZ')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ values: [values] }),
-  });
+function toRecord(table: TableName, record: Record<string, unknown>) {
+  return Object.fromEntries(tables[table].map((field) => [field, record[field] == null ? '' : String(record[field])])) as StoreRecord;
+}
+
+async function appendRecord(table: TableName, record: Record<string, unknown>) {
+  await ensureGoogleStore();
+  database()[table].push(toRecord(table, record));
+  await persistDatabase();
 }
 
 async function updateRecord(table: TableName, key: string, value: string, patch: Record<string, unknown>) {
-  const records = await readRecords(table);
+  await ensureGoogleStore();
+  const records = database()[table];
   const record = records.find((item) => item[key] === value);
   if (!record) return false;
-  const merged = { ...record, ...patch };
-  const headers = tables[table];
-  await writeValues(table, `A${record.__rowNumber}:${columnName(headers.length - 1)}${record.__rowNumber}`, [headers.map((header) => merged[header] ?? '')]);
+  Object.assign(record, toRecord(table, { ...record, ...patch }));
+  await persistDatabase();
   return true;
 }
 
 async function clearRecord(table: TableName, key: string, value: string) {
-  const records = await readRecords(table);
-  const record = records.find((item) => item[key] === value);
-  if (!record) return false;
-  const { spreadsheetId } = configuration();
-  const end = columnName(tables[table].length - 1);
-  await googleFetch(`https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${sheetRange(table, `A${record.__rowNumber}:${end}${record.__rowNumber}`)}:clear`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}',
-  });
+  await ensureGoogleStore();
+  const records = database()[table];
+  const index = records.findIndex((item) => item[key] === value);
+  if (index < 0) return false;
+  records.splice(index, 1);
+  await persistDatabase();
   return true;
 }
 
@@ -201,7 +272,9 @@ async function withWriteLock<T>(operation: () => Promise<T>) {
 }
 
 async function uploadPreprint(name: string, mimeType: string, data: Buffer) {
-  const { folderId } = configuration();
+  await ensureGoogleStore();
+  const folderId = global.__jhdhGooglePreprintsFolderId;
+  if (!folderId) throw new Error('Google Drive 預刊本資料夾尚未建立。');
   const boundary = `jhdh-${randomUUID()}`;
   const prefix = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify({ name, parents: [folderId] })}\r\n--${boundary}\r\nContent-Type: ${mimeType}\r\n\r\n`;
   const suffix = `\r\n--${boundary}--`;
@@ -222,7 +295,7 @@ const numberOrNull = (value: string) => value ? Number(value) : null;
 const numeric = (value: string) => Number(value || 0);
 const now = () => new Date().toISOString();
 
-function publicSubmission(row: SheetRecord, reviews: SheetRecord[]) {
+function publicSubmission(row: StoreRecord, reviews: StoreRecord[]) {
   return {
     id: row.id, title: row.title, authorName: row.author_name, affiliation: nullable(row.affiliation),
     category: row.category, abstract: row.abstract, keywords: nullable(row.keywords), status: row.status,
@@ -231,7 +304,7 @@ function publicSubmission(row: SheetRecord, reviews: SheetRecord[]) {
   };
 }
 
-function publicReview(row: SheetRecord) {
+function publicReview(row: StoreRecord) {
   const scores = [row.score_relevance, row.score_contribution, row.score_literature, row.score_method, row.score_structure, row.score_ethics].map(numberOrNull);
   return {
     id: row.id, reviewerName: row.reviewer_name, scoreRelevance: numberOrNull(row.score_relevance),

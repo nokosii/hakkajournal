@@ -10,11 +10,11 @@ services:
     envVars:
       - key: JOURNAL_STORAGE
         value: google
-      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+      - key: GOOGLE_OAUTH_CLIENT_ID
         sync: false
-      - key: GOOGLE_PRIVATE_KEY
+      - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
-      - key: GOOGLE_SHEET_ID
+      - key: GOOGLE_OAUTH_REFRESH_TOKEN
         sync: false
       - key: GOOGLE_DRIVE_FOLDER_ID
         sync: false

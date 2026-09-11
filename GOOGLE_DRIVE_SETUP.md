@@ -1,81 +1,121 @@
 # Google 雲端硬碟儲存設定
 
-正式環境採用以下配置：
+期刊系統採用與「隨選客語 Podcast」網站相同的儲存方式：
 
-- Google 試算表：會員、登入工作階段、投稿、審查、文章與卷期資料。
-- Google 雲端硬碟資料夾：PDF、DOC、DOCX 等預印本電子檔案。
-- Render：只保存 Google API 憑證與資源編號，不保存投稿資料。
+- 個人 Google Drive 資料夾作為正式資料來源。
+- `journal-database.json` 保存會員、登入工作階段、投稿、審查、文章與期刊卷期資料。
+- `preprints/` 子資料夾保存 PDF、DOC、DOCX 預刊本。
+- Render 或本機的 `.data/` 只作為 JSON 快取；每次正式寫入後會同步回 Google Drive。
 
-密碼只會以 scrypt 雜湊值寫入試算表，不會保存可讀的原始密碼。
+會員密碼只保存 scrypt 雜湊值，不會保存可讀的原始密碼。
 
-## 一、建立 Google Cloud 專案
+## 一、建立 Google Drive 資料夾
 
-1. 前往 [Google Cloud Console](https://console.cloud.google.com/) 建立一個專案，例如 `hakka-journal`。
+1. 使用要保存期刊資料的 Google 帳號登入 [Google Drive](https://drive.google.com/)。
+2. 在「我的雲端硬碟」建立資料夾，例如「客家與數位人文期刊資料」。
+3. 開啟資料夾，複製網址中 `/folders/` 後面的字串。
+4. 這段字串就是 Render 要使用的 `GOOGLE_DRIVE_FOLDER_ID`。
+
+系統第一次連線時會自動建立 `journal-database.json` 與 `preprints/`，不必手動建立試算表或資料欄位。
+
+## 二、啟用 Google Drive API
+
+1. 前往 [Google Cloud Console](https://console.cloud.google.com/)，選擇「隨選客語 Podcast」使用的既有專案，或建立新專案。
 2. 進入「API 和服務」→「程式庫」。
-3. 啟用 **Google Drive API**。
-4. 啟用 **Google Sheets API**。
+3. 搜尋並啟用 **Google Drive API**。
 
-## 二、建立專用服務帳戶
+本模式不使用 Google Sheets API。
 
-1. 進入「IAM 與管理」→「服務帳戶」。
-2. 建立服務帳戶，例如 `hakka-journal-storage`。
-3. 不需要授予整個 Google Cloud 專案的 Editor 或 Owner 角色。
-4. 開啟該服務帳戶的「金鑰」頁面，建立一把 JSON 金鑰。
-5. 從 JSON 記下 `client_email` 與 `private_key`。
+## 三、設定 OAuth 同意畫面
 
-私密金鑰等同系統密碼。請勿上傳 GitHub、放入試算表、寄送給其他人或貼在公開對話中；只應填入 Render 的秘密環境變數。
+1. 進入「Google Auth Platform」或「API 和服務」→「OAuth 同意畫面」。
+2. 如果使用一般 Gmail，使用者類型選「外部」。
+3. 應用程式名稱可填「客家與數位人文期刊」。
+4. 加入自己的 Google 帳號為測試使用者。
+5. 權限範圍加入 Google Drive：`https://www.googleapis.com/auth/drive`。
 
-## 三、建立共用雲端硬碟
+若直接沿用 Podcast 網站已經設定完成的 OAuth 用戶端與同一個 Google 帳號，通常可以沿用原來的 client ID、client secret 與 refresh token，只需為期刊建立另一個 Drive 資料夾並使用新的資料夾 ID。
 
-服務帳戶沒有個人雲端硬碟儲存配額，因此正式環境應使用 Google Workspace 的「共用雲端硬碟」，不能只使用服務帳戶自己的「我的雲端硬碟」。
+## 四、建立 OAuth 用戶端
 
-1. 在 Google Workspace 建立共用雲端硬碟，例如「客家與數位人文期刊」。
-2. 將服務帳戶的 `client_email` 加入共用雲端硬碟。
-3. 權限設為「內容管理員」；不必授予「管理員」。
-4. 在共用雲端硬碟中建立資料夾，例如「期刊電子檔」。
-5. 開啟該資料夾，網址中 `/folders/` 後方的字串就是 `GOOGLE_DRIVE_FOLDER_ID`。
+1. 進入「API 和服務」→「憑證」。
+2. 點選「建立憑證」→「OAuth 用戶端 ID」。
+3. 應用程式類型選擇「電腦版應用程式」。
+4. 名稱可填「JHDH Drive Storage」。
+5. 下載 OAuth 用戶端 JSON，放在專案根目錄並命名為 `oauth-client.json`。
 
-如果使用的是一般個人 Gmail、沒有共用雲端硬碟，需改採使用者 OAuth 授權模式；目前這套部署設定預設為較適合機構期刊的服務帳戶＋共用雲端硬碟。
+`oauth-client.json` 已被 `.gitignore` 排除，請勿提交到 GitHub。
 
-## 四、建立資料試算表
+## 五、取得 refresh token
 
-1. 在同一個共用雲端硬碟建立空白 Google 試算表，例如「JHDH 系統資料」。
-2. 確認服務帳戶可以編輯這份試算表。
-3. 試算表網址格式為 `https://docs.google.com/spreadsheets/d/試算表ID/edit`。
-4. 將 `/d/` 與 `/edit` 之間的字串填為 `GOOGLE_SHEET_ID`。
+在專案目錄執行：
 
-第一次啟動時，系統會自動建立以下分頁與欄位，不必手動製作：
+```powershell
+npm run drive:oauth -- url oauth-client.json
+```
 
-- `USERS`
-- `SESSIONS`
-- `ISSUES`
-- `SUBMISSIONS`
-- `REVIEWS`
+工具會顯示 `GOOGLE_OAUTH_CLIENT_ID`、`GOOGLE_OAUTH_CLIENT_SECRET` 與一個授權網址：
 
-請勿自行改名、刪除或調換第一列欄位。
+1. 用保存期刊資料的 Google 帳號開啟授權網址。
+2. 同意 Google Drive 權限。
+3. 授權完成後，瀏覽器會前往 localhost；即使頁面無法開啟也沒關係。
+4. 從瀏覽器網址列複製 `code=` 後面的授權碼，直到下一個 `&` 之前。
+5. 執行：
 
-## 五、設定 Render
+```powershell
+npm run drive:oauth -- token oauth-client.json "貼上授權碼"
+```
 
-在 Render Web Service 的 Environment 設定以下變數：
+工具顯示的結果就是 `GOOGLE_OAUTH_REFRESH_TOKEN`。這些資料都是秘密，請只填入 Render，不要貼到聊天室或提交 GitHub。
+
+## 六、設定 Render
+
+在 Render Web Service 的 Environment 填入：
 
 | 變數 | 內容 |
 | --- | --- |
 | `JOURNAL_STORAGE` | `google` |
-| `GOOGLE_SERVICE_ACCOUNT_EMAIL` | JSON 金鑰內的 `client_email` |
-| `GOOGLE_PRIVATE_KEY` | JSON 金鑰內完整的 `private_key`，包含 BEGIN/END 行 |
-| `GOOGLE_SHEET_ID` | 第四步取得的試算表 ID |
-| `GOOGLE_DRIVE_FOLDER_ID` | 第三步取得的資料夾 ID |
+| `GOOGLE_DRIVE_FOLDER_ID` | 第一步取得的資料夾 ID |
+| `GOOGLE_OAUTH_CLIENT_ID` | OAuth 用戶端 ID |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | OAuth 用戶端密鑰 |
+| `GOOGLE_OAUTH_REFRESH_TOKEN` | 第五步取得的 refresh token |
 | `SESSION_SECRET` | 至少 32 字元的隨機字串；Blueprint 可自動產生 |
 | `ADMIN_EMAIL` | 張維安主編的登入電子郵件 |
 | `ADMIN_PASSWORD` | 主編首次登入密碼，至少 12 個字元 |
 | `ADMIN_NAME` | `張維安` |
 
-重新部署後，開啟 `/api/health`。看到 `{"status":"ok"}` 表示試算表與服務帳戶權限均正常。接著用 `ADMIN_EMAIL`、`ADMIN_PASSWORD` 登入，即可在編輯工作台指派其他會員為編輯。
+重新部署後開啟 `/api/health`。看到 `{"status":"ok"}` 表示 Google Drive 已連線成功。接著檢查 Drive 資料夾，應出現：
 
-## 六、權限與備份建議
+```text
+客家與數位人文期刊資料/
+├─ journal-database.json
+└─ preprints/
+```
 
-- 共用雲端硬碟只加入必要的編輯團隊成員。
-- 不要將系統資料試算表設為「知道連結的任何人」。
-- 定期匯出試算表及電子檔案作離線備份。
-- 人員異動或疑似洩漏時，立即停用舊金鑰並建立新金鑰。
-- 投稿量或同時使用人數增加後，建議把會員與審查資料遷移至正式關聯式資料庫，只保留電子檔於 Drive。
+## 七、Render Persistent Disk（選用）
+
+Google Drive 才是正式資料來源，因此沒有 Persistent Disk 也能運作。若 Render 方案有永久磁碟，可掛載 `/var/data` 並增加：
+
+```text
+DATA_DIR=/var/data
+```
+
+這能保留本機快取並減少重新下載，但不能取代 Google Drive 備份。
+
+## 八、服務帳戶備用模式
+
+系統仍相容 Podcast 網站的服務帳戶環境變數：
+
+```text
+GOOGLE_DRIVE_SERVICE_ACCOUNT_JSON_BASE64=
+```
+
+但服務帳戶沒有個人 Drive 儲存配額。若使用一般「我的雲端硬碟」資料夾，請優先採 OAuth；服務帳戶較適合 Google Workspace 共用雲端硬碟。
+
+## 九、安全與備份
+
+- 不要公開分享期刊資料資料夾或 `journal-database.json`，其中包含會員帳號資料與密碼雜湊。
+- OAuth client secret、refresh token、服務帳戶 JSON 都不得提交到 GitHub。
+- 定期下載整個 Drive 資料夾作離線備份。
+- OAuth 憑證失效時，系統會拒絕 Google 儲存操作，不會改用瀏覽器暫存資料。
+- 此 JSON 模式適合單一 Render 執行個體；若未來同時使用量大幅增加，再遷移到關聯式資料庫。

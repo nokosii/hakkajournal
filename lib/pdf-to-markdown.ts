@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module';
+import path from 'node:path';
+
 type PdfTextItem = {
   str: string;
   transform: number[];
@@ -18,6 +21,12 @@ const CJK_START = /^[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}（【�
 const SECTION_HEADING = /^(摘要|abstract|關鍵字|關鍵詞|keywords|前言|緒論|結論|結語|參考文獻|引用文獻|致謝|附錄)$/i;
 const NUMBERED_HEADING = /^(第[一二三四五六七八九十百0-9]+[章節]|[一二三四五六七八九十]+、|\d+(?:\.\d+)*[.、]?\s+\S)/;
 const BULLET = /^(?:[•●▪◦]|[-–—])\s*/;
+
+function pdfJsDataUrl(folder: 'cmaps' | 'standard_fonts' | 'wasm') {
+  const require = createRequire(import.meta.url);
+  const packageRoot = path.dirname(require.resolve('pdfjs-dist/package.json')).replaceAll('\\', '/');
+  return `${packageRoot}/${folder}/`;
+}
 
 function median(values: number[]) {
   if (!values.length) return 12;
@@ -150,7 +159,13 @@ function linesToMarkdown(pages: TextLine[][]) {
 
 export async function pdfToMarkdown(data: Buffer) {
   const { getDocument } = await import('pdfjs-dist/legacy/build/pdf.mjs');
-  const loadingTask = getDocument({ data: Uint8Array.from(data), useWorkerFetch: false });
+  const loadingTask = getDocument({
+    data: Uint8Array.from(data),
+    useWorkerFetch: false,
+    cMapUrl: pdfJsDataUrl('cmaps'),
+    standardFontDataUrl: pdfJsDataUrl('standard_fonts'),
+    wasmUrl: pdfJsDataUrl('wasm'),
+  });
   try {
     const document = await loadingTask.promise;
     if (document.numPages > 500) throw new Error('PDF 頁數超過 500 頁，無法自動轉換。');

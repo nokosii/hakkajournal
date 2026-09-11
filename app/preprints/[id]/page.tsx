@@ -6,6 +6,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { Button } from '@/components/ui/button';
 import { FinalPdfUpload } from './final-pdf-upload';
+import { AiReviewPanel } from '@/components/ai-review-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,7 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
             <section><h2>摘要</h2><p>{preprint.abstract}</p></section>
             {preprint.abstractEn && <section><h2>Abstract</h2><p className="abstract-en">{preprint.abstractEn}</p></section>}
             <section><h2>關鍵字</h2><div className="keyword-row">{(preprint.keywords ?? '').split(/[、,]/).filter(Boolean).map((keyword) => <span key={keyword}>{keyword.trim()}</span>)}</div></section>
+            {currentUser?.id === preprint.submitterUserId && <AiReviewPanel submissionId={preprint.id} context="author" />}
             <section className="public-reviews">
               <h2>公開審查紀錄</h2>
               {reviews.length ? reviews.map((review) => {

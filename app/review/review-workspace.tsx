@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { BookOpen, Check, FileText, LoaderCircle, Scale, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { AiReviewPanel } from '@/components/ai-review-panel';
 
 type Submission = { id: string; title: string; authorName: string; affiliation: string | null; category: string; abstract: string; keywords: string | null; status: string; reviewCount: number };
 type ScoreKey = 'scoreRelevance' | 'scoreContribution' | 'scoreLiterature' | 'scoreMethod' | 'scoreStructure' | 'scoreEthics';
@@ -63,6 +64,7 @@ export function ReviewWorkspace({ reviewerName }: { reviewerName: string }) {
     {selected && <form className="review-form formal-review-form" onSubmit={saveReview}>
       <div className="review-form-head"><FileText /><div><p className="article-type">{selected.category} · PREPRINT</p><h2>{selected.title}</h2><p>{selected.authorName}{selected.affiliation ? ` · ${selected.affiliation}` : ''}</p></div></div>
       <section className="review-abstract"><b>摘要</b><p>{selected.abstract}</p>{selected.keywords && <small>關鍵字：{selected.keywords}</small>}<a href={`/api/manuscripts/${selected.id}`}>下載預印本全文</a></section>
+      <AiReviewPanel key={selected.id} submissionId={selected.id} context="reviewer" />
       <section className="score-section"><div className="score-heading"><div><h3>逐項評分</h3><p>5 優良、4 良好、3 尚可、2 待加強、1 需根本修正；不適用請選 N/A。</p></div><strong>平均 {average}</strong></div>
         <div className="score-table" role="table" aria-label="期刊審查評分表">
           <div className="score-row score-header" role="row"><span>面向</span><span>評分</span></div>

@@ -10,6 +10,7 @@ Journal of Hakka and Digital Humanities 是一套社群主導、公開審查、�
 - 編輯稿件資料、正式文章內容與出版狀態
 - 建立、編排及發布期刊卷期
 - Google Drive JSON 保存會員與期刊紀錄，`preprints/` 子資料夾保存電子檔案
+- 作者與審查人可按需產生不公開、不計分、不影響接受或拒絕判定的 AI 初步評閱
 
 ## 本機執行
 
@@ -22,5 +23,7 @@ Journal of Hakka and Digital Humanities 是一套社群主導、公開審查、�
 ## Render
 
 Repository 內的 `render.yaml` 會建立 Web Service。首次部署時需填入 Google Drive OAuth 設定、`ADMIN_EMAIL` 與 `ADMIN_PASSWORD`；首次連線會自動建立 `journal-database.json`、`preprints/` 資料夾與主編帳號。
+
+AI 初步評閱另需在 Render 設定伺服器端環境變數 `OPENAI_API_KEY`；模型可用 `OPENAI_MODEL` 調整，預設為 `gpt-5.6-luna`。AI 結果只在當次使用者畫面顯示，不寫入正式審查或編輯決策資料。
 
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/nokosii/hakkajournal)

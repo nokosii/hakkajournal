@@ -26,3 +26,7 @@ services:
         sync: false
       - key: ADMIN_NAME
         value: 張陳基
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-5.6-luna

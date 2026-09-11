@@ -414,6 +414,20 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     const submission = submissions.find((item) => item.id === values[0]);
     return result(submission ? [{ submitterUserId: submission.submitter_user_id, status: submission.status, finalName: nullable(submission.final_name) }] : []);
   }
+  if (statement.startsWith('select submitter_user_id as "submitteruserid"') && statement.includes('article_body as "articlebody"')) {
+    const submissions = await readRecords('SUBMISSIONS');
+    const submission = submissions.find((item) => item.id === values[0] && ['open_review', 'revision', 'accepted', 'published'].includes(item.status));
+    return result(submission ? [{
+      submitterUserId: submission.submitter_user_id,
+      title: submission.title,
+      authorName: submission.author_name,
+      category: submission.category,
+      abstract: submission.abstract,
+      keywords: nullable(submission.keywords),
+      articleBody: submission.article_body,
+      status: submission.status,
+    }] : []);
+  }
   if (statement.startsWith('select submitter_user_id as "submitteruserid"')) {
     const submissions = await readRecords('SUBMISSIONS');
     const submission = submissions.find((item) => item.id === values[0] && ['open_review', 'revision'].includes(item.status));

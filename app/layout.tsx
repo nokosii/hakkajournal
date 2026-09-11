@@ -8,6 +8,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: '客家與數位人文期刊｜Journal of Hakka and Digital Humanities',
   description: '連結客家歷史、語言、地方經驗與數位方法，採公開同儕審查、可追溯引用及鑽石開放取用的學術期刊。',
+  publisher: '國立聯合大學客家研究學院',
   openGraph: {
     title: '客家與數位人文期刊',
     description: '讓客家研究可閱讀、可驗證、可延伸、可引用',

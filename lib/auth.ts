@@ -65,7 +65,23 @@ export async function requireEditor(returnTo = '/editor') {
 
 export function assertSameOrigin(request: Request) {
   const origin = request.headers.get('origin');
-  if (origin && origin !== new URL(request.url).origin) throw new Error('INVALID_ORIGIN');
+  if (!origin) return;
+
+  const requestUrl = new URL(request.url);
+  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
+  const forwardedProtocol = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
+  const allowedOrigins = new Set([requestUrl.origin]);
+  if (forwardedHost) allowedOrigins.add(`${forwardedProtocol || requestUrl.protocol.slice(0, -1)}://${forwardedHost}`);
+  if (process.env.NEXT_PUBLIC_SITE_URL) allowedOrigins.add(new URL(process.env.NEXT_PUBLIC_SITE_URL).origin);
+  if (process.env.RENDER_EXTERNAL_URL) allowedOrigins.add(new URL(process.env.RENDER_EXTERNAL_URL).origin);
+
+  const originUrl = new URL(origin);
+  const localHosts = new Set(['localhost', '127.0.0.1', '[::1]']);
+  const localPreview = process.env.NODE_ENV !== 'production'
+    && localHosts.has(originUrl.hostname)
+    && localHosts.has(requestUrl.hostname)
+    && originUrl.port === requestUrl.port;
+  if (!allowedOrigins.has(originUrl.origin) && !localPreview) throw new Error('INVALID_ORIGIN');
 }
 
 function safeReturnTo(value: string) {

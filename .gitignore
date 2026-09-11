@@ -37,6 +37,7 @@ next-env.d.ts
 /outputs/
 /work/
 /.sites-runtime/
+/.data/
 
 # local reference material
 /客家研究專書_整體與逐章審查表.docx

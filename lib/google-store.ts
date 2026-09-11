@@ -395,7 +395,7 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
 
   if (statement.startsWith('insert into submissions')) return withWriteLock(async () => {
     const fileId = await uploadPreprint(String(values[11]), String(values[12]), values[10] as Buffer);
-    await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], preprint_file_id: fileId, preprint_name: values[11], preprint_type: values[12], final_file_id: '', final_name: '', final_type: '', final_uploaded_at: '', status: 'open_review', editor_notes: '', article_body: '', pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
+    await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], preprint_file_id: fileId, preprint_name: values[11], preprint_type: values[12], final_file_id: '', final_name: '', final_type: '', final_uploaded_at: '', status: 'open_review', editor_notes: '', article_body: values[13], pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
     return result([], 1);
   });
   if (statement.includes('from submissions s left join reviews r') && statement.includes("where s.status in ('open_review', 'revision', 'accepted', 'published')")) {
@@ -451,7 +451,7 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
     const current = submissions.find((item) => item.id === values[0]);
     if (!current) return result([], 0);
     const fileId = await uploadFinalPdf(String(values[2]), String(values[3]), values[1] as Buffer, current.final_file_id);
-    await updateRecord('SUBMISSIONS', 'id', String(values[0]), { final_file_id: fileId, final_name: values[2], final_type: values[3], final_uploaded_at: now(), updated_at: now() });
+    await updateRecord('SUBMISSIONS', 'id', String(values[0]), { final_file_id: fileId, final_name: values[2], final_type: values[3], final_uploaded_at: now(), article_body: values[4], updated_at: now() });
     return result([], 1);
   });
   if (statement.startsWith('update submissions set title=')) return withWriteLock(async () => {

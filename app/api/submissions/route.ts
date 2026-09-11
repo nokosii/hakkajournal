@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { assertSameOrigin, getCurrentUser } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { readValidatedPdf } from '@/lib/pdf-upload';
+import { pdfToMarkdown } from '@/lib/pdf-to-markdown';
 
 type SubmissionListRow = { id: string; title: string; authorName: string; affiliation: string | null; category: string; abstract: string; keywords: string | null; status: string; reviewCount: number; issueId: string | null; createdAt: string };
 
@@ -34,9 +35,12 @@ export async function POST(request: Request) {
   let bytes: Buffer;
   try { bytes = await readValidatedPdf(manuscript, '預印本'); }
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : '預印本僅接受 PDF 檔案。' }, { status: 400 }); }
+  let articleBody: string;
+  try { articleBody = await pdfToMarkdown(bytes); }
+  catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'PDF 文字擷取失敗。' }, { status: 422 }); }
   const id = `JHDH-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
   await query(`INSERT INTO submissions
-    (id, submitter_user_id, title, title_en, author_name, affiliation, category, abstract, abstract_en, keywords, preprint_data, preprint_name, preprint_type)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, [id, user.id, title, titleEn || null, authorName, affiliation || null, category, abstract, abstractEn || null, keywords || null, bytes, manuscript.name, 'application/pdf']);
+    (id, submitter_user_id, title, title_en, author_name, affiliation, category, abstract, abstract_en, keywords, preprint_data, preprint_name, preprint_type, article_body)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [id, user.id, title, titleEn || null, authorName, affiliation || null, category, abstract, abstractEn || null, keywords || null, bytes, manuscript.name, 'application/pdf', articleBody]);
   return Response.json({ id, status: 'open_review' }, { status: 201 });
 }

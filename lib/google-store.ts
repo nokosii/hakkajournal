@@ -189,13 +189,25 @@ async function bootstrapEditor() {
   const email = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const password = process.env.ADMIN_PASSWORD;
   if (!email || !password) return false;
-  if (database().USERS.some((user) => user.email.toLowerCase() === email)) return false;
   const salt = randomBytes(16).toString('hex');
   const key = await scrypt(password, salt, 64) as Buffer;
+  const passwordHash = `scrypt:${salt}:${key.toString('hex')}`;
+  const existing = database().USERS.find((user) => user.email.toLowerCase() === email);
+
+  if (existing) {
+    Object.assign(existing, {
+      password_hash: passwordHash,
+      display_name: process.env.ADMIN_NAME || '張陳基',
+      role: 'editor_in_chief',
+      status: 'active',
+    });
+    return true;
+  }
+
   database().USERS.push(toRecord('USERS', {
     id: randomUUID(),
     email,
-    password_hash: `scrypt:${salt}:${key.toString('hex')}`,
+    password_hash: passwordHash,
     display_name: process.env.ADMIN_NAME || '張陳基',
     affiliation: '',
     expertise: '',

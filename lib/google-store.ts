@@ -13,7 +13,7 @@ const tables = {
   USERS: ['id', 'email', 'password_hash', 'display_name', 'affiliation', 'expertise', 'role', 'status', 'created_at'],
   SESSIONS: ['token_hash', 'user_id', 'expires_at', 'created_at'],
   ISSUES: ['id', 'volume', 'number', 'year', 'title', 'description', 'status', 'published_at', 'created_by', 'created_at'],
-  SUBMISSIONS: ['id', 'submitter_user_id', 'title', 'title_en', 'author_name', 'affiliation', 'category', 'abstract', 'abstract_en', 'keywords', 'preprint_file_id', 'preprint_name', 'preprint_type', 'final_file_id', 'final_name', 'final_type', 'final_uploaded_at', 'status', 'editor_notes', 'article_body', 'pages', 'doi', 'issue_id', 'published_at', 'created_at', 'updated_at'],
+  SUBMISSIONS: ['id', 'submitter_user_id', 'title', 'title_en', 'author_name', 'affiliation', 'category', 'abstract', 'abstract_en', 'keywords', 'author_email', 'submission_channel', 'preprint_file_id', 'preprint_name', 'preprint_type', 'final_file_id', 'final_name', 'final_type', 'final_uploaded_at', 'status', 'editor_notes', 'article_body', 'pages', 'doi', 'issue_id', 'published_at', 'created_at', 'updated_at'],
   REVIEWS: ['id', 'submission_id', 'reviewer_user_id', 'reviewer_name', 'score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics', 'academic_strengths', 'required_revisions', 'other_suggestions', 'recommendation', 'conflict_statement', 'created_at'],
 } as const;
 
@@ -394,8 +394,8 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
   });
 
   if (statement.startsWith('insert into submissions')) return withWriteLock(async () => {
-    const fileId = await uploadPreprint(String(values[11]), String(values[12]), values[10] as Buffer);
-    await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], preprint_file_id: fileId, preprint_name: values[11], preprint_type: values[12], final_file_id: '', final_name: '', final_type: '', final_uploaded_at: '', status: 'open_review', editor_notes: '', article_body: values[13], pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
+    const fileId = await uploadPreprint(String(values[13]), String(values[14]), values[12] as Buffer);
+    await appendRecord('SUBMISSIONS', { id: values[0], submitter_user_id: values[1], title: values[2], title_en: values[3], author_name: values[4], affiliation: values[5], category: values[6], abstract: values[7], abstract_en: values[8], keywords: values[9], author_email: values[10], submission_channel: values[11], preprint_file_id: fileId, preprint_name: values[13], preprint_type: values[14], final_file_id: '', final_name: '', final_type: '', final_uploaded_at: '', status: 'open_review', editor_notes: '', article_body: values[15], pages: '', doi: '', issue_id: '', published_at: '', created_at: now(), updated_at: now() });
     return result([], 1);
   });
   if (statement.includes('from submissions s left join reviews r') && statement.includes("where s.status in ('open_review', 'revision', 'accepted', 'published')")) {
@@ -428,7 +428,7 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
   if (statement.startsWith('select id,title,title_en as "titleen",author_name as "authorname"') && statement.includes("from submissions where id=$1 and status <> 'rejected'")) {
     const submissions = await readRecords('SUBMISSIONS');
     const item = submissions.find((row) => row.id === values[0] && ['open_review', 'revision', 'accepted', 'published'].includes(row.status));
-    return result(item ? [{ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, affiliation: nullable(item.affiliation), category: item.category, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), preprintName: item.preprint_name, submitterUserId: item.submitter_user_id, finalName: nullable(item.final_name), status: item.status, createdAt: item.created_at }] : []);
+    return result(item ? [{ id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, affiliation: nullable(item.affiliation), category: item.category, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), preprintName: item.preprint_name, submitterUserId: item.submitter_user_id, submissionChannel: item.submission_channel || 'member', finalName: nullable(item.final_name), status: item.status, createdAt: item.created_at }] : []);
   }
   if (statement.startsWith('select title,abstract from submissions')) {
     const submissions = await readRecords('SUBMISSIONS');
@@ -467,7 +467,7 @@ export async function executeGoogleStoreQuery<T extends QueryResultRow>(sql: str
       const itemReviews = reviews.filter((review) => review.submission_id === item.id);
       const reviewAverages = itemReviews.map((review) => ['score_relevance', 'score_contribution', 'score_literature', 'score_method', 'score_structure', 'score_ethics'].map((key) => numberOrNull(review[key])).filter((score): score is number => score !== null)).filter((scores) => scores.length).map((scores) => scores.reduce((sum, score) => sum + score, 0) / scores.length);
       const averageScore = reviewAverages.length ? Math.round(reviewAverages.reduce((sum, score) => sum + score, 0) / reviewAverages.length * 10) / 10 : null;
-      return { id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), status: item.status, articleBody: item.article_body, pages: nullable(item.pages), doi: nullable(item.doi), finalName: nullable(item.final_name), issueId: nullable(item.issue_id), editorNotes: item.editor_notes, createdAt: item.created_at, reviewCount: itemReviews.length, averageScore };
+      return { id: item.id, title: item.title, titleEn: nullable(item.title_en), authorName: item.author_name, authorEmail: nullable(item.author_email), abstract: item.abstract, abstractEn: nullable(item.abstract_en), keywords: nullable(item.keywords), status: item.status, articleBody: item.article_body, pages: nullable(item.pages), doi: nullable(item.doi), finalName: nullable(item.final_name), issueId: nullable(item.issue_id), editorNotes: item.editor_notes, submissionChannel: item.submission_channel || 'member', createdAt: item.created_at, reviewCount: itemReviews.length, averageScore };
     }));
   }
   if (statement.startsWith('select count(*)::int as count from submissions')) {

@@ -9,5 +9,5 @@ export const dynamic = 'force-dynamic';
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ returnTo?: string }> }) {
   if (await getCurrentUser()) redirect('/');
   const { returnTo = '/' } = await searchParams;
-  return <main><SiteHeader /><section className="auth-page"><div className="auth-copy"><p className="eyebrow">MEMBER SIGN IN</p><h1>會員登入</h1><p>登入後即可投稿、審查預印本並追蹤自己的學術紀錄。</p></div><div><AuthForm mode="login" returnTo={returnTo} /><p className="auth-switch">還沒有帳號？<a href={`/register?returnTo=${encodeURIComponent(returnTo)}`}>立即註冊</a></p></div></section><SiteFooter /></main>;
+  return <main><SiteHeader /><section className="auth-page"><div className="auth-copy"><p className="eyebrow">MEMBER SIGN IN</p><h1>會員登入</h1><p>登入後即可投稿、審查預印本並追蹤自己的學術紀錄。</p></div><div><AuthForm mode="login" returnTo={returnTo} /><p className="auth-switch">還沒有帳號？<a href={`/register?returnTo=${encodeURIComponent(returnTo)}`}>立即註冊</a></p><p className="auth-switch">受邀或無法使用會員系統？<a href="/special-submission">查看特殊作者 EMAIL 投稿</a></p></div></section><SiteFooter /></main>;
 }

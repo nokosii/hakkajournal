@@ -8,7 +8,7 @@ const scrypt = promisify(scryptCallback);
 const SESSION_COOKIE = 'jhdh_session';
 const SESSION_DAYS = 30;
 
-export type UserRole = 'member' | 'editor' | 'editor_in_chief';
+export type UserRole = 'member' | 'assistant_editor' | 'editor' | 'editor_in_chief';
 export type CurrentUser = { id: string; email: string; displayName: string; affiliation: string | null; expertise: string | null; role: UserRole };
 
 export async function hashPassword(password: string) {
@@ -60,6 +60,12 @@ export async function requireUser(returnTo = '/') {
 export async function requireEditor(returnTo = '/editor') {
   const user = await requireUser(returnTo);
   if (user.role !== 'editor' && user.role !== 'editor_in_chief') redirect('/');
+  return user;
+}
+
+export async function requireAssistantEditor(returnTo = '/assistant-editor') {
+  const user = await requireUser(returnTo);
+  if (!['assistant_editor', 'editor', 'editor_in_chief'].includes(user.role)) redirect('/');
   return user;
 }
 

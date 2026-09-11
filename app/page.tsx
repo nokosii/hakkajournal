@@ -62,6 +62,7 @@ export default async function Home() {
             <Button nativeButton={false} render={<a href="/review" />} size="lg" variant="outline">參與審稿</Button>
           </div>
           <p className="access-note"><CheckCircle2 /> 不收投稿費與文章處理費（APC）；預印本、審查紀錄及正式文章皆開放閱讀。</p>
+          <p className="special-channel-link">受邀或無法使用會員系統？<a href="/special-submission">特殊作者可透過 EMAIL 投稿 <ArrowRight /></a></p>
         </div>
         <aside className="principles-card" aria-label="期刊運作原則">
           <p className="card-kicker">JHDH / OPEN PROCESS</p>

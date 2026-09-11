@@ -1,7 +1,7 @@
 import { assertSameOrigin, getCurrentUser } from '@/lib/auth';
 import { query } from '@/lib/db';
 
-const assignableRoles = ['member', 'editor'] as const;
+const assignableRoles = ['member', 'assistant_editor', 'editor'] as const;
 
 export async function PATCH(request: Request) {
   try {

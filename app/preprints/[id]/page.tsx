@@ -13,7 +13,7 @@ type Preprint = {
   id: string; title: string; titleEn: string | null; authorName: string;
   affiliation: string | null; category: string; abstract: string;
   abstractEn: string | null; keywords: string | null; status: string; createdAt: string;
-  submitterUserId: string; finalName: string | null;
+  submitterUserId: string; submissionChannel: string; finalName: string | null;
 };
 type Review = {
   id: string; reviewerName: string; recommendation: string; scores: Array<number | null>;
@@ -31,7 +31,7 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
   const [preprints, currentUser] = await Promise.all([
     query<Preprint>(`SELECT id,title,title_en AS "titleEn",author_name AS "authorName",
     affiliation,category,abstract,abstract_en AS "abstractEn",keywords,status,created_at AS "createdAt",
-    submitter_user_id AS "submitterUserId", final_name AS "finalName"
+    submitter_user_id AS "submitterUserId", submission_channel AS "submissionChannel", final_name AS "finalName"
     FROM submissions WHERE id=$1 AND status <> 'rejected'`, [id]),
     getCurrentUser(),
   ]);
@@ -79,7 +79,7 @@ export default async function PreprintPage({ params }: { params: Promise<{ id: s
           </div>
           <aside className="article-aside">
             <p><b>公開版本紀錄</b></p>
-            <dl><dt>稿件編號</dt><dd>{preprint.id}</dd><dt>提交日期</dt><dd>{new Date(preprint.createdAt).toLocaleDateString('zh-TW')}</dd><dt>狀態</dt><dd>{preprint.status === 'published' ? '正式出版' : '公開審查'}</dd><dt>審查</dt><dd>{reviews.length} 份公開意見</dd><dt>授權</dt><dd>CC BY 4.0</dd></dl>
+            <dl><dt>稿件編號</dt><dd>{preprint.id}</dd><dt>提交日期</dt><dd>{new Date(preprint.createdAt).toLocaleDateString('zh-TW')}</dd><dt>投稿管道</dt><dd>{preprint.submissionChannel === 'assisted_email' ? '編輯部協助登錄' : '會員線上投稿'}</dd><dt>狀態</dt><dd>{preprint.status === 'published' ? '正式出版' : '公開審查'}</dd><dt>審查</dt><dd>{reviews.length} 份公開意見</dd><dt>授權</dt><dd>CC BY 4.0</dd></dl>
             <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}`} />} className="download-button"><Download /> 下載預印本 PDF</Button>
             {preprint.status === 'published' && preprint.finalName && <Button nativeButton={false} render={<a href={`/api/manuscripts/${preprint.id}?version=final`} />} className="download-button"><Download /> 下載正式 PDF</Button>}
             {currentUser?.id === preprint.submitterUserId && ['accepted', 'published'].includes(preprint.status) && <FinalPdfUpload submissionId={preprint.id} existingName={preprint.finalName} />}

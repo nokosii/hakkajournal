@@ -29,8 +29,12 @@ export async function POST(request: Request) {
   const abstract = String(data.get('abstract') ?? '').trim();
   const abstractEn = String(data.get('abstractEn') ?? '').trim();
   const keywords = String(data.get('keywords') ?? '').trim();
+  const submissionChannel = data.get('submissionChannel') === 'assisted_email' ? 'assisted_email' : 'member';
+  const authorEmail = String(data.get('authorEmail') ?? '').trim().toLowerCase();
   const manuscript = data.get('manuscript');
   const openReviewConsent = data.get('openReviewConsent') === 'on';
+  if (submissionChannel === 'assisted_email' && !['assistant_editor', 'editor', 'editor_in_chief'].includes(user.role)) return Response.json({ error: '僅助理編輯、編輯或主編可代特殊作者投稿。' }, { status: 403 });
+  if (submissionChannel === 'assisted_email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(authorEmail)) return Response.json({ error: '請填寫特殊作者的有效聯絡信箱。' }, { status: 400 });
   if (!title || !authorName || !category || abstract.length < 80 || !openReviewConsent || !(manuscript instanceof File)) return Response.json({ error: '請完成必填欄位、公開審查聲明並上傳預印本 PDF。' }, { status: 400 });
   let bytes: Buffer;
   try { bytes = await readValidatedPdf(manuscript, '預印本'); }
@@ -40,7 +44,7 @@ export async function POST(request: Request) {
   catch (error) { return Response.json({ error: error instanceof Error ? error.message : 'PDF 文字擷取失敗。' }, { status: 422 }); }
   const id = `JHDH-${new Date().getFullYear()}-${randomUUID().slice(0, 8).toUpperCase()}`;
   await query(`INSERT INTO submissions
-    (id, submitter_user_id, title, title_en, author_name, affiliation, category, abstract, abstract_en, keywords, preprint_data, preprint_name, preprint_type, article_body)
-    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`, [id, user.id, title, titleEn || null, authorName, affiliation || null, category, abstract, abstractEn || null, keywords || null, bytes, manuscript.name, 'application/pdf', articleBody]);
+    (id, submitter_user_id, title, title_en, author_name, affiliation, category, abstract, abstract_en, keywords, author_email, submission_channel, preprint_data, preprint_name, preprint_type, article_body)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`, [id, user.id, title, titleEn || null, authorName, affiliation || null, category, abstract, abstractEn || null, keywords || null, authorEmail || user.email, submissionChannel, bytes, manuscript.name, 'application/pdf', articleBody]);
   return Response.json({ id, status: 'open_review' }, { status: 201 });
 }
